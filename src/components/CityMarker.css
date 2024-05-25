@@ -1,0 +1,18 @@
+.city-marker {
+  position: absolute;
+  background-color: red;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.city-label {
+  color: white;
+  position: absolute;
+  top: calc(100% + 5px); /* Position the label below the marker */
+  transform: translateX(-50%); /* Center the label horizontally */
+  left: 50%; /* Center the label horizontally */
+}

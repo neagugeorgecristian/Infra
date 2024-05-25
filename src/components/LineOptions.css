@@ -1,0 +1,22 @@
+.line-options {
+  position: fixed;
+  background: black;
+  border: 1px solid black;
+  padding: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.line-options button {
+  display: block;
+  margin: 5px 0;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+}
+
+.line-options button:hover {
+  background: #f0f0f0;
+}

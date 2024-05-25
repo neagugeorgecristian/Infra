@@ -1,0 +1,20 @@
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* App.css */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%; /* Set the container height to fill the viewport height */
+}
+
+.map-svg {
+  width: 100%; /* Make the SVG fill the entire width of its container */
+  flex-grow: 1; /* Allow the SVG to grow and fill the remaining vertical space */
+}
+
