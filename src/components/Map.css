@@ -1,4 +1,4 @@
-/* App.css or Map.css */
+/* Map.css */
 .map-container {
   position: relative;
   width: 100%;
@@ -13,8 +13,13 @@
 }
 
 .line {
-  stroke: white; /* Set the color of the line */
+  stroke: black; /* Set the color of the line */
   stroke-width: 2px; /* Set the width of the line */
   fill: none; /* Ensure the line has no fill */
 }
 
+.doubleline {
+  stroke: black;
+  stroke-width: 4px;
+  fill: none;
+}

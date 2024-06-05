@@ -19,7 +19,10 @@ function App() {
   return (
     <div className="app-container">
       <h1 className="title">Infrastructure game</h1>
-      <Map selectedMarkers={selectedMarkers} onMarkerClick={handleMarkerClick} />
+      <Map 
+        selectedMarkers={selectedMarkers} 
+        onMarkerClick={handleMarkerClick} 
+      />
     </div>
   );
 }
