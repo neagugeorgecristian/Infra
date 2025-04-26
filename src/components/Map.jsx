@@ -13,7 +13,15 @@ function Map() {
     position: { x: 0, y: 0},
     line: null
   });
+  const [deletedLines, setDeletedLines] = useState([]); // Track deleted lines
+
   const [infoCity, setInfoCity] = useState(null);
+  const cities = [
+    { x: 78, y: 74, cityName: 'Constanța' }, // Bottom right
+    { x: 50, y: 50, cityName: 'Sibiu' },      // Center
+    { x: 42, y: 30, cityName: 'Clooj' },        // Top left
+    { x: 42, y: 70, cityName: 'Craiova' }        // Bottom left
+  ];
 
   const handleMarkerSelect = ({ x, y, cityName }) => {
     setSelectedMarkers((prevSelected) => {
@@ -52,8 +60,14 @@ function Map() {
   };
 
   const handleDeleteLine = () => {
-    setLines((prevLines) => prevLines.filter((element) => element != lineOptions.line));
-    handleCloseOptions();
+    if (lineOptions.line) {
+      // Remove the line immediately from the `lines` array
+      setLines((prevLines) => prevLines.filter((line) => line !== lineOptions.line));
+      // Optionally track deleted lines (this is useful if you need to access the history of deleted lines)
+      setDeletedLines((prevDeleted) => [...prevDeleted, lineOptions.line]);
+      // Reset the line options visibility to close the menu immediately after deletion
+      handleCloseOptions();
+    }
   };
 
   const handleUpgradeLine = () => {
@@ -73,7 +87,14 @@ function Map() {
 
   return (
     <div className="map-container" onClick={handleMapClick}>
-      <SVGMap lines={lines} onLineClick={handleLineClick}/>
+      <SVGMap 
+        lines={lines} 
+        onLineClick={handleLineClick}
+        cities={cities}
+        onMarkerClick={handleMarkerSelect}
+        selectedMarkers={selectedMarkers}
+        deletedLines={deletedLines}
+      />
       {lineOptions.visible && 
         <LineOptions 
           position={lineOptions.position} 
@@ -83,9 +104,6 @@ function Map() {
           onShowInfo={() => setInfoCity(lineOptions.line?.points[0])}
         />
       }
-      <CityMarker x={60} y={35} cityName="Clooj" onSelect={handleMarkerSelect} selectedMarkers={selectedMarkers} />
-      <CityMarker x={20} y={20} cityName="Sibiu" onSelect={handleMarkerSelect} selectedMarkers={selectedMarkers} />
-      <CityMarker x={50} y={50} cityName="Constanța" onSelect={handleMarkerSelect} selectedMarkers={selectedMarkers} />
       {infoCity && <CityInfo city={infoCity} onClose={() => setInfoCity(null)} />}
     </div>
   );
