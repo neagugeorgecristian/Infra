@@ -38,12 +38,7 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, de
       <ReactSVG src={mapSvg} />
       <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
         {lines.map((line, index) => {
-
-          // Skip the deleted lines by checking if line is in the deletedLines array
-          if (deletedLines.some(deletedLine => 
-            deletedLine.points[0].cityName === line.points[0].cityName &&
-            deletedLine.points[1].cityName === line.points[1].cityName &&
-            deletedLine.className === line.className)) return null;
+          if (line.isDeleted) return null;
 
           const from = line.points[0];
           const to = line.points[1];
@@ -51,36 +46,22 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, de
           const toPx = percentToPx(to.x, to.y);
           const pathId = `path-${index}`;
 
-          const baseDuration = 2; // seconds
+          const baseDuration = 2;
           const speed = line.speedMultiplier || 1;
           const duration = baseDuration / speed;
 
           return (
             <React.Fragment key={index}>
-              {/* Clickable lines */}
-              {line.className === 'doubleline' ? (
-                <>
-                  <line
-                    x1={`${from.x}%`} y1={`${from.y + offset}%`}
-                    x2={`${to.x}%`} y2={`${to.y + offset}%`}
-                    stroke="black" strokeWidth="2"
-                    onClick={(e) => onLineClick(e, line)}
-                  />
-                  <line
-                    x1={`${from.x}%`} y1={`${from.y - offset}%`}
-                    x2={`${to.x}%`} y2={`${to.y - offset}%`}
-                    stroke="black" strokeWidth="2"
-                    onClick={(e) => onLineClick(e, line)}
-                  />
-                </>
-              ) : (
-                <line
-                  x1={`${from.x}%`} y1={`${from.y}%`}
-                  x2={`${to.x}%`} y2={`${to.y}%`}
-                  className={line.className}
-                  onClick={(e) => onLineClick(e, line)}
-                />
-              )}
+              {/* Single line - color depends on upgrade */}
+              <line
+                x1={`${from.x}%`}
+                y1={`${from.y}%`}
+                x2={`${to.x}%`}
+                y2={`${to.y}%`}
+                stroke={line.upgraded ? "blue" : "red"}
+                strokeWidth="2"
+                onClick={(e) => onLineClick(e, line)}
+              />
 
               {/* Invisible path for animation */}
               <path
@@ -96,13 +77,14 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, de
                 </animateMotion>
               </circle>
               <circle r="3" fill="red">
-                <animateMotion dur={`${duration}s`} repeatCount="indefinite" rotate="auto" begin={`${duration / 2}s`}>
+                <animateMotion dur={`${duration}s`} repeatCount="indefinite" rotate="auto" begin={`${duration/2}s`}>
                   <mpath href={`#${pathId}`} />
                 </animateMotion>
               </circle>
             </React.Fragment>
           );
         })}
+
         {cities.map((city, index) => (
           <g
             key={index}
