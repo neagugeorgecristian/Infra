@@ -2,31 +2,10 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
 import mapSvg from '../assets/ro.svg';
 
-function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, deletedLines }) {
+function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, deletedLines, svgFile }) {
   const offset = 0.3;
   const svgRef = useRef(null);
   const [svgSize, setSvgSize] = useState({ width: 1200, height: 800 }); // same as map.css values for .map-svg;
-
-  /*
-  useEffect(() => {
-    const observer = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        const { width, height } = entry.contentRect;
-        setSvgSize({ width, height });
-      }
-    });
-
-    if (svgRef.current) {
-      observer.observe(svgRef.current);
-    }
-
-    return () => {
-      if (svgRef.current) {
-        observer.unobserve(svgRef.current);
-      }
-    };
-  }, []);
-  */
 
   const percentToPx = (xPercent, yPercent) => ({
     x: (xPercent / 100) * svgSize.width,
@@ -35,7 +14,7 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, de
 
   return (
     <div className="map-svg" ref={svgRef}>
-      <ReactSVG src={mapSvg} />
+      <ReactSVG src={svgFile} />
       <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
         {lines.map((line, index) => {
           if (line.isDeleted) return null;

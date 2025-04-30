@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import Map from './components/Map';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import HomePage from './pages/HomePage';
+import GamePage from './pages/GamePage';
 import './App.css';
 
 function App() {
@@ -17,13 +19,23 @@ function App() {
   };
 
   return (
-    <div className="app-container">
-      <h1 className="title">Infrastructure game</h1>
-      <Map 
-        selectedMarkers={selectedMarkers} 
-        onMarkerClick={handleMarkerClick} 
-      />
-    </div>
+    <Router>
+      <div className="app-container">
+        <h1 className="title">Infrastructure game</h1>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route 
+            path="/scenario/:id" 
+            element={
+              <GamePage 
+                selectedMarkers={selectedMarkers}
+                onMarkerClick={handleMarkerClick}
+              />
+            } 
+          />
+        </Routes>
+      </div>
+    </Router>
   );
 }
 

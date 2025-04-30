@@ -3,9 +3,10 @@ import SVGMap from './SVGMap';
 import CityMarker from './CityMarker';
 import LineOptions from './LineOptions';
 import CityInfo from './CityInfo';
+import InfoPanel from './InfoPanel';
 import './Map.css';
 
-function Map() {
+function Map({ svgMap, cities, scenarioName }) {
   const [selectedMarkers, setSelectedMarkers] = useState([]);
   const [lines, setLines] = useState([]);
   const [lineOptions, setLineOptions] = useState({
@@ -15,20 +16,23 @@ function Map() {
   });
 
   const [infoCity, setInfoCity] = useState(null);
+  /*
   const cities = [
     { x: 78, y: 74, cityName: 'Constanța' }, // Bottom right
     { x: 50, y: 50, cityName: 'Sibiu' },      // Center
     { x: 42, y: 30, cityName: 'Clooj' },        // Top left
     { x: 42, y: 70, cityName: 'Craiova' }        // Bottom left
   ];
+  */
 
   const handleMarkerSelect = ({ x, y, cityName }) => {
+    setInfoCity({ type: 'city', data: { x, y, cityName } });
     setSelectedMarkers((prevSelected) => {
       // Prevent duplicate lines from the same city to itself
       if (prevSelected.length === 1 && prevSelected[0].cityName !== cityName) {
         const newLine = {
           points: [prevSelected[0], { x, y, cityName }],
-          className: 'line',
+          className: 'singleline',
           speedMultiplier: 1
         };
         setLines((prevLines) => [...prevLines, newLine]);
@@ -153,6 +157,7 @@ function Map() {
         lines={lines} 
         onLineClick={handleLineClick}
         cities={cities}
+        svgFile={svgMap}
         onMarkerClick={handleMarkerSelect}
         selectedMarkers={selectedMarkers}
       />
@@ -163,11 +168,14 @@ function Map() {
           onDeleteLine={() => handleDeleteLine(lineOptions.line)}
           onUpgradeLine={handleToggleUpgradeLine}
           onDowngradeLine={handleToggleUpgradeLine} // if you reuse the same
-          onShowInfo={() => setInfoCity(lineOptions.line?.points[0])}
+          onShowInfo={() => {
+            setInfoCity({ type: 'line', data: lineOptions.line });
+            handleCloseOptions();
+          }}
           line={lineOptions.line}
         />
       }
-      {infoCity && <CityInfo city={infoCity} onClose={() => setInfoCity(null)} />}
+      {infoCity && <InfoPanel info={infoCity} onClose={() => setInfoCity(null)} />}
     </div>
   );
 }
