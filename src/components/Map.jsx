@@ -7,6 +7,8 @@ import LineOptions from './LineOptions';
 import CityInfo from './CityInfo';
 import InfoPanel from './InfoPanel';
 import NavigatorPanel from './NavigatorPanel';
+import MoneyPanel from './MoneyPanel';
+import { calculateLineCost } from './utils';
 
 import './Map.css';
 
@@ -15,44 +17,64 @@ function Map({ svgMap, cities, scenarioName }) {
   const [lines, setLines] = useState([]);
   const [lineOptions, setLineOptions] = useState({
     visible: false,
-    position: { x: 0, y: 0},
+    position: { x: 0, y: 0 },
     line: null
   });
 
   const navigate = useNavigate();
-
   const [infoCity, setInfoCity] = useState(null);
+  const [money, setMoney] = useState(1000);
 
   const handleBackToMenu = () => {
     navigate('/');
   };
 
+  // ✅ UNIVERSAL MONEY WRAPPER
+  const trySpendMoney = (amount, onSuccess) => {
+    if (money >= amount) {
+      setMoney(prev => prev - amount);
+      onSuccess();
+      return true;
+    } else {
+      alert(`Not enough money! Required: €${amount}, Available: €${money}`);
+      console.log(`Not enough money! Required: €${amount}, Available: €${money}`);
+      return false;
+    }
+  };
+
+
   const handleMarkerSelect = ({ x, y, cityName }) => {
-    setInfoCity({ type: 'city', data: { x, y, cityName } });
-    setSelectedMarkers((prevSelected) => {
-      // Prevent duplicate lines from the same city to itself
-      if (prevSelected.length === 1 && prevSelected[0].cityName !== cityName) {
+    if (selectedMarkers.length === 1 && selectedMarkers[0].cityName !== cityName) {
+      const point1 = selectedMarkers[0];
+      const point2 = { x, y, cityName };
+
+      const cost = Math.round(
+        Math.sqrt(Math.pow(point2.x - point1.x, 2) + Math.pow(point2.y - point1.y, 2)) * 10
+      );
+
+      trySpendMoney(cost, () => {
         const newLine = {
-          points: [prevSelected[0], { x, y, cityName }],
+          points: [point1, point2],
           className: 'singleline',
           speedMultiplier: 1
         };
-        setLines((prevLines) => [...prevLines, newLine]);
-        return [];
-      }
-      return [{ x, y, cityName }];
-    });
+        setLines(prev => [...prev, newLine]);
+        setSelectedMarkers([]);
+      });
+    } else {
+      setSelectedMarkers([{ x, y, cityName }]);
+    }
+
+    setInfoCity({ type: 'city', data: { x, y, cityName } });
   };
 
   const handleMapClick = (event) => {
-    // If the click target is not a city marker or a descendant
     if (!event.target.closest('.city-marker')) {
       setSelectedMarkers([]);
     }
   };
 
   const handleLineClick = (event, line) => {
-    const rect = event.target.getBoundingClientRect();
     const position = {
       x: event.clientX + 10,
       y: event.clientY + 10
@@ -60,17 +82,16 @@ function Map({ svgMap, cities, scenarioName }) {
     setLineOptions({ visible: true, position, line });
   };
 
-
   const handleCloseOptions = () => {
-    setLineOptions({ visible: false, position: { x: 0, y: 0}, line: null });
+    setLineOptions({ visible: false, position: { x: 0, y: 0 }, line: null });
   };
 
   const handleDeleteLine = (lineToDelete) => {
     setLines(prevLines => prevLines.map(line =>
       (line.points[0].cityName === lineToDelete.points[0].cityName &&
-       line.points[1].cityName === lineToDelete.points[1].cityName &&
-       line.className === lineToDelete.className)
-        ? { ...line, isDeleted: true } // <-- mark it as deleted
+        line.points[1].cityName === lineToDelete.points[1].cityName &&
+        line.className === lineToDelete.className)
+        ? { ...line, isDeleted: true }
         : line
     ));
     handleCloseOptions();
@@ -78,71 +99,109 @@ function Map({ svgMap, cities, scenarioName }) {
   };
 
   const handleAddLine = (newLine) => {
-    setLines(prevLines => {
-      const existingLineIndex = prevLines.findIndex(line =>
-        line.points[0].cityName === newLine.points[0].cityName &&
-        line.points[1].cityName === newLine.points[1].cityName &&
-        line.className === newLine.className
-      );
+    const cost = calculateLineCost(newLine.points[0], newLine.points[1]);
 
-      if (existingLineIndex !== -1) {
-        // Line exists, revive it
-        const updatedLines = [...prevLines];
-        updatedLines[existingLineIndex].isDeleted = false;
-        return updatedLines;
-      } else {
-        // Line doesn't exist, add new
-        return [...prevLines, newLine];
-      }
+    trySpendMoney(cost, () => {
+      setLines(prevLines => {
+        const existingIndex = prevLines.findIndex(line =>
+          line.points[0].cityName === newLine.points[0].cityName &&
+          line.points[1].cityName === newLine.points[1].cityName &&
+          line.className === newLine.className
+        );
+
+        if (existingIndex !== -1) {
+          const updated = [...prevLines];
+          updated[existingIndex].isDeleted = false;
+          return updated;
+        } else {
+          return [...prevLines, newLine];
+        }
+      });
     });
-    //handleCloseOptions();
   };
 
   const handleToggleUpgradeLine = () => {
-    // Step 1: Update the line immediately
-    setLines((prevLines) => {
-      return prevLines.map((line) => {
-        if (line.points[0].cityName === lineOptions.line.points[0].cityName &&
-            line.points[1].cityName === lineOptions.line.points[1].cityName &&
-            !line.isDeleted) {
-          return {
-            ...line,
-            className: line.className === 'singleline' ? 'doubleline' : 'singleline',
-            upgraded: line.className === 'singleline', // Toggling the upgrade flag
-            speedMultiplier: line.className === 'singleline' ? line.speedMultiplier * 1.33 : 1
-          };
-        }
-        return line;
-      });
-    });
+    const targetLine = lines.find(line =>
+      line.points[0].cityName === lineOptions.line.points[0].cityName &&
+      line.points[1].cityName === lineOptions.line.points[1].cityName &&
+      !line.isDeleted
+    );
 
-    // Step 2: Close the menu after the state has been updated
-    setLineOptions((prevState) => ({
-      ...prevState,
+    if (!targetLine) {
+      console.log('No matching line found.');
+      return;
+    }
+
+    const baseCost = calculateLineCost(targetLine.points[0], targetLine.points[1]);
+    const upgradeCost = baseCost;
+
+    if (targetLine.className === 'singleline') {
+      // Upgrade path
+      if (!trySpendMoney(upgradeCost, () => {})) {
+        return; // Not enough money, exit early
+      }
+
+      setLines(prevLines =>
+        prevLines.map(line =>
+          line === targetLine
+            ? {
+                ...line,
+                className: 'doubleline',
+                upgraded: true,
+                speedMultiplier: line.speedMultiplier * 1.33
+              }
+            : line
+        )
+      );
+
+    } else {
+      // Downgrade path → refund half the upgrade cost
+      const refund = Math.round(upgradeCost / 2);
+      setMoney(prev => prev + refund);
+
+      setLines(prevLines =>
+        prevLines.map(line =>
+          line === targetLine
+            ? {
+                ...line,
+                className: 'singleline',
+                upgraded: false,
+                speedMultiplier: 1
+              }
+            : line
+        )
+      );
+    }
+
+    setLineOptions(prev => ({
+      ...prev,
       visible: false
     }));
 
-    setInfoCity(null); // Clear the city info
+    setInfoCity(null);
   };
+
+
 
   return (
     <div className="map-container" onClick={handleMapClick}>
       <NavigatorPanel onBack={handleBackToMenu} />
-      <SVGMap 
-        lines={lines} 
+      <MoneyPanel money={money} />
+      <SVGMap
+        lines={lines}
         onLineClick={handleLineClick}
         cities={cities}
         svgFile={svgMap}
         onMarkerClick={handleMarkerSelect}
         selectedMarkers={selectedMarkers}
       />
-      {lineOptions.visible && 
-        <LineOptions 
-          position={lineOptions.position} 
+      {lineOptions.visible &&
+        <LineOptions
+          position={lineOptions.position}
           onClose={handleCloseOptions}
           onDeleteLine={() => handleDeleteLine(lineOptions.line)}
           onUpgradeLine={handleToggleUpgradeLine}
-          onDowngradeLine={handleToggleUpgradeLine} // if you reuse the same
+          onDowngradeLine={handleToggleUpgradeLine}
           onShowInfo={() => {
             setInfoCity({ type: 'line', data: lineOptions.line });
             handleCloseOptions();

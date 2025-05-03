@@ -1,0 +1,12 @@
+.money-panel {
+  position: absolute;
+  top: 100px; /* adjust depending on NavigatorPanel’s height */
+  left: 10px;
+  background-color: #444;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 16px;
+  border-radius: 8px;
+  min-width: 120px; /* fixed width */
+  text-align: center;
+}
