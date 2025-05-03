@@ -1,7 +1,7 @@
 /* Map.css */
 .map-container {
   width: 1200px;   /* Fixed width */
-  height: 1000px;  /* Fixed height */
+  height: 1200px;  /* Fixed height */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -12,11 +12,17 @@
 
 
 .map-svg {
-  width: 1200px;   /* fixed width matching your SVG natural dimensions */
-  height: 1000px;  /* fixed height matching your SVG natural dimensions */
   position: relative;
+  /* REMOVE width: 1200px; height: 800px; */
 }
 
+/*
+.map-svg .injected-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+*/
 
 .line {
   stroke: black; /* Set the color of the line */

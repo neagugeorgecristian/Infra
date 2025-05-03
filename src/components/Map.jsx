@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import SVGMap from './SVGMap';
 import CityMarker from './CityMarker';
 import LineOptions from './LineOptions';
 import CityInfo from './CityInfo';
 import InfoPanel from './InfoPanel';
+import NavigatorPanel from './NavigatorPanel';
+
 import './Map.css';
 
 function Map({ svgMap, cities, scenarioName }) {
@@ -15,15 +19,13 @@ function Map({ svgMap, cities, scenarioName }) {
     line: null
   });
 
+  const navigate = useNavigate();
+
   const [infoCity, setInfoCity] = useState(null);
-  /*
-  const cities = [
-    { x: 78, y: 74, cityName: 'Constanța' }, // Bottom right
-    { x: 50, y: 50, cityName: 'Sibiu' },      // Center
-    { x: 42, y: 30, cityName: 'Clooj' },        // Top left
-    { x: 42, y: 70, cityName: 'Craiova' }        // Bottom left
-  ];
-  */
+
+  const handleBackToMenu = () => {
+    navigate('/');
+  };
 
   const handleMarkerSelect = ({ x, y, cityName }) => {
     setInfoCity({ type: 'city', data: { x, y, cityName } });
@@ -96,34 +98,6 @@ function Map({ svgMap, cities, scenarioName }) {
     //handleCloseOptions();
   };
 
-/*
-  const handleToggleUpgradeLine = () => {
-    setLines((prevLines) =>
-      prevLines.map((line) =>
-        line.points[0].cityName === lineOptions.line.points[0].cityName &&
-        line.points[1].cityName === lineOptions.line.points[1].cityName &&
-        !line.isDeleted
-          ? {
-              ...line,
-              className: line.className === 'singleline' ? 'doubleline' : 'singleline',
-              upgraded: line.className === 'singleline', // track upgraded status
-              speedMultiplier: line.className === 'singleline' ? line.speedMultiplier * 1.33 : 1
-            }
-          : line
-      )
-    );
-    
-    // Update line options state after toggle to ensure correct menu display
-    setLineOptions((prevState) => ({
-      ...prevState,
-      line: prevState.line ? { ...prevState.line, className: prevState.line.className === 'singleline' ? 'doubleline' : 'singleline' } : prevState.line
-    }));
-
-    handleCloseOptions(); // Close the menu
-    setInfoCity(null); // Reset info city
-  };
-*/
-
   const handleToggleUpgradeLine = () => {
     // Step 1: Update the line immediately
     setLines((prevLines) => {
@@ -153,6 +127,7 @@ function Map({ svgMap, cities, scenarioName }) {
 
   return (
     <div className="map-container" onClick={handleMapClick}>
+      <NavigatorPanel onBack={handleBackToMenu} />
       <SVGMap 
         lines={lines} 
         onLineClick={handleLineClick}
