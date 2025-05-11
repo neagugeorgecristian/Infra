@@ -1,5 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
+import { predefinedPaths } from '../customPaths';
+
 
 function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile }) {
   const svgContainerRef = useRef(null);
@@ -69,13 +71,17 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
           const to = line.points[1];
           const fromPx = percentToPx(from.x, from.y);
           const toPx = percentToPx(to.x, to.y);
+
           const pathId = `path-${index}`;
           const baseDuration = 2;
           const speed = line.speedMultiplier || 1;
           const duration = baseDuration / speed;
 
+
+
           return (
             <React.Fragment key={index}>
+            
               <line
                 x1={`${from.x}%`}
                 y1={`${from.y}%`}
@@ -85,6 +91,7 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
                 strokeWidth="2"
                 onClick={(e) => onLineClick(e, line)}
               />
+            
               <path
                 id={pathId}
                 d={`M ${fromPx.x} ${fromPx.y} L ${toPx.x} ${toPx.y}`}

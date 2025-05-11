@@ -1,10 +1,14 @@
 import React from 'react';
 import './LineOptions.css'; // Reuse styling
 
-function InfoPanel({ info, onClose }) {
+function InfoPanel({ info, onClose, satisfactionMap }) {
   if (!info || !info.type) return null;
 
   const { type, data } = info;
+
+  const isCity = info?.type === 'city';
+  const cityName = isCity ? info.data.cityName : null;
+  const satisfaction = isCity ? satisfactionMap[cityName] ?? 0 : null;
 
   return (
     <div className="line-options" style={{ position: 'absolute', top: '10px', right: '10px' }}>
@@ -12,6 +16,7 @@ function InfoPanel({ info, onClose }) {
         <>
           <strong>{data.cityName}</strong>
           <p>Region: {regionMap[data.cityName] || 'Unknown'}</p>
+          <strong>Satisfaction:</strong> {satisfaction}
         </>
       )}
 

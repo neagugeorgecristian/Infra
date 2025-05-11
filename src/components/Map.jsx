@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import SVGMap from './SVGMap';
@@ -25,9 +26,77 @@ function Map({ svgMap, cities, scenarioName }) {
   const [infoCity, setInfoCity] = useState(null);
   const [money, setMoney] = useState(1000);
 
+  const GAME_DURATION = 60;
+  const TARGET_MONEY = 1500;
+
+  const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
+  const [gameOverMessage, setGameOverMessage] = useState(null);
+  const timerRef = useRef(null);
+
+  const [satisfactionMap, setSatisfactionMap] = useState(() =>
+    Object.fromEntries(cities.map(city => [city.cityName, 50]))
+  );
+
+
   const handleBackToMenu = () => {
     navigate('/');
   };
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          if (money >= TARGET_MONEY) {
+            setGameOverMessage("🎉 Congratulations, you passed!");
+          } else {
+            setGameOverMessage("💥 Your infrastructure projects have collapsed!");
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const incomeInterval = setInterval(() => {
+      // Build a set of connected cities
+      const connectedCities = new Set();
+      lines.forEach(line => {
+        if (!line.isDeleted) {
+          connectedCities.add(line.points[0].cityName);
+          connectedCities.add(line.points[1].cityName);
+        }
+      });
+
+      let totalIncome = 0;
+      const updatedSatisfaction = { ...satisfactionMap };
+
+      for (const [city, satisfaction] of Object.entries(satisfactionMap)) {
+        if (connectedCities.has(city)) {
+          // Generate money only if connected
+          totalIncome += Math.round(satisfaction / 5);
+
+          // Gradually increase satisfaction up to 100
+          updatedSatisfaction[city] = Math.min(100, satisfaction + 2);
+        } else {
+          // Unconnected cities lose satisfaction
+          updatedSatisfaction[city] = Math.max(0, satisfaction - 5);
+        }
+      }
+
+      setSatisfactionMap(updatedSatisfaction);
+      setMoney(prev => prev + totalIncome);
+    }, 5000);
+
+    return () => clearInterval(incomeInterval);
+  }, [lines, satisfactionMap]);
+
+
+
 
   // ✅ UNIVERSAL MONEY WRAPPER
   const trySpendMoney = (amount, onSuccess) => {
@@ -44,6 +113,8 @@ function Map({ svgMap, cities, scenarioName }) {
 
 
   const handleMarkerSelect = ({ x, y, cityName }) => {
+    if (gameOverMessage) return;
+
     if (selectedMarkers.length === 1 && selectedMarkers[0].cityName !== cityName) {
       const point1 = selectedMarkers[0];
       const point2 = { x, y, cityName };
@@ -99,6 +170,8 @@ function Map({ svgMap, cities, scenarioName }) {
   };
 
   const handleAddLine = (newLine) => {
+    if (gameOverMessage) return;
+
     const cost = calculateLineCost(newLine.points[0], newLine.points[1]);
 
     trySpendMoney(cost, () => {
@@ -115,6 +188,13 @@ function Map({ svgMap, cities, scenarioName }) {
           return updated;
         } else {
           return [...prevLines, newLine];
+          setSatisfactionMap(prev => {
+            const updated = { ...prev };
+            const [cityA, cityB] = [newLine.points[0].cityName, newLine.points[1].cityName];
+            updated[cityA] = Math.min(100, (updated[cityA] || 50) + 10);
+            updated[cityB] = Math.min(100, (updated[cityB] || 50) + 10);
+            return updated;
+          });
         }
       });
     });
@@ -133,10 +213,12 @@ function Map({ svgMap, cities, scenarioName }) {
     }
 
     const baseCost = calculateLineCost(targetLine.points[0], targetLine.points[1]);
-    const upgradeCost = baseCost;
 
     if (targetLine.className === 'singleline') {
-      // Upgrade path
+      // Upgrade path - cost is 1.5x base
+
+      const upgradeCost = Math.round(baseCost * 1.5);
+
       if (!trySpendMoney(upgradeCost, () => {})) {
         return; // Not enough money, exit early
       }
@@ -156,7 +238,7 @@ function Map({ svgMap, cities, scenarioName }) {
 
     } else {
       // Downgrade path → refund half the upgrade cost
-      const refund = Math.round(upgradeCost / 2);
+      const refund = Math.round(baseCost * 0.5);
       setMoney(prev => prev + refund);
 
       setLines(prevLines =>
@@ -209,7 +291,47 @@ function Map({ svgMap, cities, scenarioName }) {
           line={lineOptions.line}
         />
       }
-      {infoCity && <InfoPanel info={infoCity} onClose={() => setInfoCity(null)} />}
+      
+      {infoCity && (
+        <InfoPanel
+          info={infoCity}
+          satisfactionMap={satisfactionMap}
+          onClose={() => setInfoCity(null)}
+        />
+      )}
+
+      <div style={{
+        position: 'absolute',
+        top: 10,
+        right: 500,
+        background: '#222',
+        color: 'white',
+        padding: '10px 15px',
+        borderRadius: '8px',
+        fontSize: '18px',
+        zIndex: 10
+      }}>
+        ⏱ {timeLeft}s
+      </div>
+
+      {gameOverMessage && (
+        <div style={{
+          position: 'absolute',
+          top: '40%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'black',
+          color: 'white',
+          padding: '30px',
+          borderRadius: '12px',
+          fontSize: '24px',
+          textAlign: 'center',
+          zIndex: 1000
+        }}>
+          {gameOverMessage}
+        </div>
+      )}
+
     </div>
   );
 }
