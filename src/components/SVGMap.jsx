@@ -1,33 +1,22 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
-import { predefinedPaths } from '../customPaths';
 
-
-function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile }) {
+function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile, satisfactionMap = {} }) {
   const svgContainerRef = useRef(null);
   const [viewBox, setViewBox] = useState('0 0 1200 800');
   const maxWidth = 1200;
   const maxHeight = 1000;
 
-  // TODO: Possible move to utils
   const useSvgContainerSize = (viewBox, maxWidth, maxHeight) => {
-    const [minX, minY, vbWidth, vbHeight] = viewBox.split(' ').map(Number);
+    const [, , vbWidth, vbHeight] = viewBox.split(' ').map(Number);
     const svgAspectRatio = vbWidth / vbHeight;
     const maxAspectRatio = maxWidth / maxHeight;
 
-    let finalWidth, finalHeight;
-
     if (svgAspectRatio > maxAspectRatio) {
-      finalWidth = maxWidth;
-      finalHeight = maxWidth / svgAspectRatio;
-    } else {
-      finalHeight = maxHeight;
-      finalWidth = maxHeight * svgAspectRatio;
+      return { width: maxWidth, height: maxWidth / svgAspectRatio };
     }
-
-    return { width: finalWidth, height: finalHeight };
+    return { width: maxHeight * svgAspectRatio, height: maxHeight };
   };
-
 
   const { width: containerWidth, height: containerHeight } = useSvgContainerSize(viewBox, maxWidth, maxHeight);
 
@@ -35,11 +24,9 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
     const svgElement = svgContainerRef.current?.querySelector('svg');
     if (svgElement) {
       const vb = svgElement.getAttribute('viewBox');
-      if (vb) {
-        setViewBox(vb);
-      }
+      if (vb) setViewBox(vb);
     }
-  }, [svgFile]); // re-run when svgFile changes
+  }, [svgFile]);
 
   const [svgSize, setSvgSize] = useState({ width: 1200, height: 1000 });
 
@@ -64,7 +51,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
         viewBox={viewBox}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* Your lines and cities rendering stays unchanged */}
         {lines.map((line, index) => {
           if (line.isDeleted) return null;
           const from = line.points[0];
@@ -73,15 +59,25 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
           const toPx = percentToPx(to.x, to.y);
 
           const pathId = `path-${index}`;
-          const baseDuration = 2;
-          const speed = line.speedMultiplier || 1;
-          const duration = baseDuration / speed;
+          const SPEED_PX_PER_SEC = 100;
+          const speedMultiplier = line.speedMultiplier || 1;
 
+          const dx = toPx.x - fromPx.x;
+          const dy = toPx.y - fromPx.y;
+          const distancePx = Math.sqrt(dx * dx + dy * dy);
+          const travelTime = distancePx / (SPEED_PX_PER_SEC * speedMultiplier);
+          const waitTime = 2;
+          const totalDuration = 2 * travelTime + 2 * waitTime;
 
+          const t1 = travelTime / totalDuration;
+          const t2 = (travelTime + waitTime) / totalDuration;
+          const t3 = (2 * travelTime + waitTime) / totalDuration;
+
+          const keyTimes = `0; ${t1.toFixed(4)}; ${t2.toFixed(4)}; ${t3.toFixed(4)}; 1`;
+          const keyPoints = `0; 1; 1; 0; 0`;
 
           return (
             <React.Fragment key={index}>
-            
               <line
                 x1={`${from.x}%`}
                 y1={`${from.y}%`}
@@ -91,24 +87,21 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
                 strokeWidth="2"
                 onClick={(e) => onLineClick(e, line)}
               />
-            
               <path
                 id={pathId}
                 d={`M ${fromPx.x} ${fromPx.y} L ${toPx.x} ${toPx.y}`}
                 fill="none"
                 stroke="none"
               />
-              <circle r="3" fill="red">
-                <animateMotion dur={`${duration}s`} repeatCount="indefinite" rotate="auto">
-                  <mpath href={`#${pathId}`} />
-                </animateMotion>
-              </circle>
-              <circle r="3" fill="red">
+              <circle r="3" fill="yellow">
                 <animateMotion
-                  dur={`${duration}s`}
+                  dur={`${totalDuration}s`}
                   repeatCount="indefinite"
-                  rotate="auto"
-                  begin={`${duration / 2}s`}
+                  calcMode="spline"
+                  keyTimes={keyTimes}
+                  keyPoints={keyPoints}
+                  keySplines="0.4 0 0.6 1; 0 0 1 1; 0.4 0 0.6 1; 0 0 1 1"
+                  begin="1s"
                 >
                   <mpath href={`#${pathId}`} />
                 </animateMotion>
@@ -129,9 +122,12 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
               cy={`${city.y}%`}
               r="5"
               fill={
-                selectedMarkers.some((marker) => marker.cityName === city.cityName)
-                  ? 'red'
-                  : 'blue'
+                selectedMarkers.some(m => m.cityName === city.cityName)
+                  ? 'white'
+                  : (satisfactionMap[city.cityName] ?? 50) >= 80 ? '#00cc44'
+                  : (satisfactionMap[city.cityName] ?? 50) >= 50 ? '#ffaa00'
+                  : (satisfactionMap[city.cityName] ?? 50) >= 20 ? '#ff4400'
+                  : '#880000'
               }
               stroke="white"
               strokeWidth="1"
