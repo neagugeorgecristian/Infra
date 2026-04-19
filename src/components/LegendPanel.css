@@ -1,0 +1,41 @@
+.legend-panel {
+  position: absolute;
+  top: 180px; /* below MoneyPanel */
+  left: 10px;
+
+  background-color: #444;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+
+  font-size: 14px;
+  min-width: 140px;
+}
+
+.legend-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.legend-line {
+  width: 30px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+/* Match your SVG line colors */
+.legend-line.red {
+  background-color: red;
+}
+
+.legend-line.blue {
+  background-color: blue;
+}

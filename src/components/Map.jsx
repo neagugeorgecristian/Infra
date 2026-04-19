@@ -6,13 +6,26 @@ import LineOptions from './LineOptions';
 import InfoPanel from './InfoPanel';
 import NavigatorPanel from './NavigatorPanel';
 import MoneyPanel from './MoneyPanel';
+import LegendPanel from './LegendPanel';
 import { calculateLineCost } from './utils.js';
+import { useEventSystem, EventBanner } from './EventSystem';
+import { SPAWNABLE_CITIES } from './CitySpawner';
+import ObjectivePanel from './ObjectivePanel';
 
 import './Map.css';
 
 function Map({ svgMap, cities, scenarioName }) {
   const [selectedMarkers, setSelectedMarkers] = useState([]);
-  const [lines, setLines] = useState([]);
+
+  const [lines, setLines] = useState(() => {
+    if (cities.length < 2) return [];
+    return [{
+      points: [cities[0], cities[1]],
+      className: 'singleline',
+      speedMultiplier: 0.5
+    }];
+  });
+
   const [lineOptions, setLineOptions] = useState({
     visible: false,
     position: { x: 0, y: 0 },
@@ -23,26 +36,62 @@ function Map({ svgMap, cities, scenarioName }) {
   const [infoCity, setInfoCity] = useState(null);
   const [money, setMoney] = useState(1000);
 
-  const GAME_DURATION = 60;
-  const TARGET_MONEY = 1500;
+  const GAME_DURATION = 360;
+  const TARGET_MONEY = 2500;
 
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [gameOverMessage, setGameOverMessage] = useState(null);
+
   const [satisfactionMap, setSatisfactionMap] = useState(() =>
     Object.fromEntries(cities.map(city => [city.cityName, 50]))
   );
+
+  const [activeCities, setActiveCities] = useState(cities);
+  const [newCityFlash, setNewCityFlash] = useState(null);
+  const [passengersDelivered, setPassengersDelivered] = useState(0);
 
   const timerRef = useRef(null);
   const moneyRef = useRef(money);
   const satisfactionRef = useRef(satisfactionMap);
   const linesRef = useRef(lines);
+  const passengersRef = useRef(0);
 
   useEffect(() => { moneyRef.current = money; }, [money]);
   useEffect(() => { satisfactionRef.current = satisfactionMap; }, [satisfactionMap]);
   useEffect(() => { linesRef.current = lines; }, [lines]);
+  useEffect(() => { passengersRef.current = passengersDelivered; }, [passengersDelivered]);
+
+  const gamePhase = timeLeft > 300 ? 0
+    : timeLeft > 240 ? 1
+    : timeLeft > 180 ? 2
+    : timeLeft > 120 ? 3
+    : timeLeft > 60  ? 4
+    : 5;
+
+  const { activeEvent } = useEventSystem({
+    gamePhase,
+    lines,
+    setLines,
+    setMoney,
+    active: !gameOverMessage
+  });
+
+  // City spawning
+  useEffect(() => {
+    const spawnList = SPAWNABLE_CITIES[scenarioName?.toLowerCase()] || [];
+    const toSpawn = spawnList.find(s => s.appearAtTimeLeft === timeLeft);
+    if (!toSpawn) return;
+
+    const newCity = toSpawn.city;
+    setActiveCities(prev => [...prev, newCity]);
+    setSatisfactionMap(prev => ({ ...prev, [newCity.cityName]: 50 }));
+    setNewCityFlash(newCity.cityName);
+    setTimeout(() => setNewCityFlash(null), 3000);
+  }, [timeLeft]);
 
   const handleBackToMenu = () => navigate('/');
 
+  // Timer
   useEffect(() => {
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
@@ -67,6 +116,7 @@ function Map({ svgMap, cities, scenarioName }) {
     return () => clearInterval(timerRef.current);
   }, []);
 
+  // Income + satisfaction + passengers
   useEffect(() => {
     const incomeInterval = setInterval(() => {
       const currentLines = linesRef.current;
@@ -115,10 +165,10 @@ function Map({ svgMap, cities, scenarioName }) {
       }
 
       const getIncome = (s) => {
-        if (s >= 80) return 25;
-        if (s >= 60) return 15;
-        if (s >= 40) return 8;
-        if (s >= 20) return 3;
+        if (s >= 80) return 20;
+        if (s >= 60) return 10;
+        if (s >= 40) return 6;
+        if (s >= 20) return 2;
         return 0;
       };
 
@@ -127,6 +177,16 @@ function Map({ svgMap, cities, scenarioName }) {
           totalIncome += getIncome(satisfaction);
         }
       }
+
+      // Upkeep per active line
+      const upkeepCost = currentLines.filter(l => !l.isDeleted).length * 3;
+      totalIncome -= upkeepCost;
+
+      // Passengers delivered this tick
+      const newPassengers = Object.entries(currentSatisfaction)
+        .filter(([city]) => connectedCities.has(city))
+        .reduce((sum, [, sat]) => sum + Math.floor(sat / 20), 0);
+      setPassengersDelivered(prev => prev + newPassengers);
 
       setSatisfactionMap(updatedSatisfaction);
       setMoney(prev => prev + totalIncome);
@@ -235,14 +295,17 @@ function Map({ svgMap, cities, scenarioName }) {
     <div className="map-container" onClick={handleMapClick}>
       <NavigatorPanel onBack={handleBackToMenu} />
       <MoneyPanel money={money} />
+      <LegendPanel />
+      <EventBanner event={activeEvent} />
       <SVGMap
         lines={lines}
         onLineClick={handleLineClick}
-        cities={cities}
+        cities={activeCities}
         svgFile={svgMap}
         onMarkerClick={handleMarkerSelect}
         selectedMarkers={selectedMarkers}
         satisfactionMap={satisfactionMap}
+        newCityFlash={newCityFlash}
       />
 
       {lineOptions.visible && (
@@ -279,15 +342,32 @@ function Map({ svgMap, cities, scenarioName }) {
 
       {gameOverMessage && (
         <div style={{
-          position: 'absolute', top: '40%', left: '50%',
+          position: 'absolute', top: '50%', left: '50%',
           transform: 'translate(-50%, -50%)',
-          background: 'black', color: 'white',
-          padding: '30px', borderRadius: '12px',
-          fontSize: '24px', textAlign: 'center', zIndex: 1000
+          background: '#111', color: 'white',
+          padding: '40px', borderRadius: '16px',
+          fontSize: '18px', textAlign: 'center',
+          zIndex: 1000, minWidth: '320px',
+          border: '2px solid #444'
         }}>
-          {gameOverMessage}
+          <div style={{ fontSize: '28px', marginBottom: '16px' }}>{gameOverMessage}</div>
+          <div style={{ marginBottom: '8px' }}>🧳 Passengers delivered: <strong>{passengersDelivered}</strong></div>
+          <div style={{ marginBottom: '8px' }}>
+            😊 Avg satisfaction: <strong>
+              {Math.round(Object.values(satisfactionMap).reduce((a, b) => a + b, 0) / cities.length)}%
+            </strong>
+          </div>
+          <div style={{ marginBottom: '8px' }}>💰 Final balance: <strong>€{money}</strong></div>
+          <div style={{ marginBottom: '24px', fontSize: '22px' }}>
+            {passengersDelivered >= 100 && money >= TARGET_MONEY ? '🥇 Gold'
+              : passengersDelivered >= 60 || money >= TARGET_MONEY ? '🥈 Silver'
+              : '🥉 Bronze'}
+          </div>
+          <button onClick={() => window.location.reload()}>Play Again</button>
         </div>
       )}
+
+      {!gameOverMessage && <ObjectivePanel gamePhase={gamePhase} />}
     </div>
   );
 }

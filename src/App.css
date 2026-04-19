@@ -7,6 +7,9 @@
 
 /* App.css */
 .app-container {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont,
+  "SegoeUI", Roboto, "Helvetica Neue", Arial,
+  "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
 
-function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile, satisfactionMap = {} }) {
+function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile, satisfactionMap = {}, newCityFlash }) {
   const svgContainerRef = useRef(null);
   const [viewBox, setViewBox] = useState('0 0 1200 800');
   const maxWidth = 1200;
@@ -120,7 +120,7 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
             <circle
               cx={`${city.x}%`}
               cy={`${city.y}%`}
-              r="5"
+              r="7"
               fill={
                 selectedMarkers.some(m => m.cityName === city.cityName)
                   ? 'white'
@@ -129,8 +129,8 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
                   : (satisfactionMap[city.cityName] ?? 50) >= 20 ? '#ff4400'
                   : '#880000'
               }
-              stroke="white"
-              strokeWidth="1"
+              stroke={newCityFlash === city.cityName ? '#ffff00' : 'white'}
+              strokeWidth={newCityFlash === city.cityName ? '3' : '1'}
             />
             <text
               x={`${city.x}%`}
