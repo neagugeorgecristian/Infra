@@ -142,8 +142,16 @@ function Map({ svgMap, cities, scenarioName }) {
           )
         ).length;
 
-        if (isConnected) {
-          const growthRate = Math.min(connectionCount * 2, 8);
+        // AFTER
+        if (!isConnected) {
+          const decayRate = satisfaction > 50 ? 8 : 4;
+          updatedSatisfaction[city] = Math.max(0, satisfaction - decayRate);
+        } else if (connectionCount === 1) {
+          // Single connection — very slow decay, not enough to thrive
+          updatedSatisfaction[city] = Math.max(0, satisfaction - 1);
+        } else {
+          // 2+ connections — grows, faster with more links
+          const growthRate = Math.min((connectionCount - 1) * 3, 9);
           updatedSatisfaction[city] = Math.min(100, satisfaction + growthRate);
 
           const hasUpgrade = currentLines.some(l =>
@@ -154,9 +162,6 @@ function Map({ svgMap, cities, scenarioName }) {
           if (hasUpgrade) {
             updatedSatisfaction[city] = Math.min(100, updatedSatisfaction[city] + 3);
           }
-        } else {
-          const decayRate = satisfaction > 50 ? 8 : 4;
-          updatedSatisfaction[city] = Math.max(0, satisfaction - decayRate);
         }
       }
 
@@ -227,7 +232,7 @@ function Map({ svgMap, cities, scenarioName }) {
 
       const cost = calculateLineCost(point1, point2);
       trySpendMoney(cost, () => {
-        setLines(prev => [...prev, { points: [point1, point2], className: 'singleline', speedMultiplier: 1 }]);
+        setLines(prev => [...prev, { points: [point1, point2], className: 'singleline', speedMultiplier: 0.5 }]);
         setSelectedMarkers([]);
       });
     } else {
@@ -275,20 +280,30 @@ function Map({ svgMap, cities, scenarioName }) {
       if (!trySpendMoney(Math.round(baseCost * 1.5), () => {})) return;
       setLines(prev => prev.map(line =>
         line === target
-          ? { ...line, className: 'doubleline', upgraded: true, speedMultiplier: line.speedMultiplier * 1.33 }
+          ? { ...line, className: 'doubleline', upgraded: true, speedMultiplier: 0.75 }
           : line
       ));
     } else {
       setMoney(prev => prev + Math.round(baseCost * 0.5));
       setLines(prev => prev.map(line =>
         line === target
-          ? { ...line, className: 'singleline', upgraded: false, speedMultiplier: 1 }
+          ? { ...line, className: 'singleline', upgraded: false, speedMultiplier: 0.5 }
           : line
       ));
     }
 
     handleCloseOptions();
     setInfoCity(null);
+  };
+
+  const getUpgradeCost = (line) => {
+    const baseCost = calculateLineCost(line.points[0], line.points[1]);
+    return Math.round(baseCost * 1.5);
+  };
+
+  const getDowngradeRefund = (line) => {
+    const baseCost = calculateLineCost(line.points[0], line.points[1]);
+    return Math.round(baseCost * 0.5);
   };
 
   return (
@@ -320,6 +335,8 @@ function Map({ svgMap, cities, scenarioName }) {
             handleCloseOptions();
           }}
           line={lineOptions.line}
+          upgradeCost={getUpgradeCost(lineOptions.line)}
+          downgradeRefund={getDowngradeRefund(lineOptions.line)}
         />
       )}
 
@@ -333,11 +350,17 @@ function Map({ svgMap, cities, scenarioName }) {
 
       <div style={{
         position: 'absolute', top: 10, right: 500,
-        background: '#222', color: 'white',
-        padding: '10px 15px', borderRadius: '8px',
-        fontSize: '18px', zIndex: 10
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        gap: '8px', zIndex: 10
       }}>
-        ⏱ {timeLeft}s
+        <div style={{
+          background: '#222', color: 'white',
+          padding: '10px 15px', borderRadius: '8px',
+          fontSize: '18px'
+        }}>
+          ⏱ {timeLeft}s
+        </div>
+        {!gameOverMessage && <ObjectivePanel gamePhase={gamePhase} />}
       </div>
 
       {gameOverMessage && (
@@ -367,7 +390,7 @@ function Map({ svgMap, cities, scenarioName }) {
         </div>
       )}
 
-      {!gameOverMessage && <ObjectivePanel gamePhase={gamePhase} />}
+
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import './LineOptions.css';
 
-function LineOptions({ position, onClose, onDeleteLine, onUpgradeLine, onDowngradeLine, onShowInfo, line }) {
+function LineOptions({ position, onClose, onDeleteLine, onUpgradeLine, onDowngradeLine, onShowInfo, line, upgradeCost, downgradeRefund }) {
   const style = {
     left: `${position.x}px`,
     top: `${position.y}px`
@@ -13,14 +13,13 @@ function LineOptions({ position, onClose, onDeleteLine, onUpgradeLine, onDowngra
   return (
     <div className="line-options" style={style}>
       {/* Show upgrade/downgrade buttons based on line class */}
-      {!isUpgraded && <button onClick={onUpgradeLine}>Upgrade Line</button>}
-      {isUpgraded && <button onClick={onDowngradeLine}>Downgrade Line</button>}
+      {!isUpgraded && <button onClick={onUpgradeLine}>Upgrade (-€{upgradeCost})</button>}
+      {isUpgraded && <button onClick={onDowngradeLine}>Downgrade (+€{downgradeRefund})</button>}
       {/* Show delete only for non-upgraded lines */}
       {!isUpgraded && <button onClick={onDeleteLine}>Delete Line</button>}
       <button onClick={onShowInfo}>Information</button>
     </div>
   );
 }
-
 
 export default LineOptions;

@@ -12,11 +12,10 @@ const PHASE_OBJECTIVES = [
 function ObjectivePanel({ gamePhase }) {
   return (
     <div style={{
-      position: 'absolute', bottom: '20px', left: '50%',
-      transform: 'translateX(-50%)',
       background: 'rgba(0,0,0,0.75)', color: 'white',
       padding: '8px 20px', borderRadius: '8px',
-      fontSize: '14px', zIndex: 10, textAlign: 'center'
+      fontSize: '14px', textAlign: 'center',
+      whiteSpace: 'nowrap'
     }}>
       🎯 <strong>Objective:</strong> {PHASE_OBJECTIVES[gamePhase]}
     </div>
