@@ -4,6 +4,7 @@ import Map from '../components/Map';
 import romania from '../scenarios/romania';
 import bulgaria from '../scenarios/bulgaria';
 import moldova from '../scenarios/moldova';
+import europeScenario from '../scenarios/europe';
 
 function GamePage({ selectedMarkers, onMarkerClick }) {
   const { id } = useParams();
@@ -11,7 +12,8 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
   const scenarioMap = {
     romania,
     bulgaria,
-    moldova
+    moldova,
+    europe: europeScenario
   };
 
   const scenario = scenarioMap[id];
@@ -23,8 +25,7 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
       svgMap={scenario.svgMap} 
       cities={scenario.cities} 
       scenarioName={scenario.name}
-      selectedMarkers={selectedMarkers}
-      onMarkerClick={onMarkerClick}
+      scenarioType={scenario.type}
     />
   );
 }

@@ -9,7 +9,7 @@ const PHASE_OBJECTIVES = [
   "Hold the network together until time runs out"
 ];
 
-function ObjectivePanel({ gamePhase }) {
+function ObjectivePanel({ gamePhase, completedCount }) {
   return (
     <div style={{
       background: 'rgba(0,0,0,0.75)', color: 'white',
@@ -18,6 +18,7 @@ function ObjectivePanel({ gamePhase }) {
       whiteSpace: 'nowrap'
     }}>
       🎯 <strong>Objective:</strong> {PHASE_OBJECTIVES[gamePhase]}
+      <span style={{ marginLeft: '12px', opacity: 0.7 }}>✅ {completedCount}/5</span>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
 
-function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile, satisfactionMap = {}, newCityFlash }) {
+function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, svgFile, satisfactionMap = {}, newCityFlash, gameOver = false }) {
   const svgContainerRef = useRef(null);
   const [viewBox, setViewBox] = useState('0 0 1200 800');
   const maxWidth = 1200;
@@ -57,55 +57,69 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick, sv
           const to = line.points[1];
           const fromPx = percentToPx(from.x, from.y);
           const toPx = percentToPx(to.x, to.y);
+          const midPx = { x: (fromPx.x + toPx.x) / 2, y: (fromPx.y + toPx.y) / 2 };
 
-          const pathId = `path-${index}`;
+          const lineKey = line.id || index;
+          const pathId = `path-${lineKey}`;
+
           const SPEED_PX_PER_SEC = 100;
-          const speedMultiplier = line.speedMultiplier || 1;
-
+          const speedMultiplier = line.speedMultiplier || 0.5;
           const dx = toPx.x - fromPx.x;
           const dy = toPx.y - fromPx.y;
           const distancePx = Math.sqrt(dx * dx + dy * dy);
           const travelTime = distancePx / (SPEED_PX_PER_SEC * speedMultiplier);
           const waitTime = 2;
           const totalDuration = 2 * travelTime + 2 * waitTime;
-
           const t1 = travelTime / totalDuration;
           const t2 = (travelTime + waitTime) / totalDuration;
           const t3 = (2 * travelTime + waitTime) / totalDuration;
-
           const keyTimes = `0; ${t1.toFixed(4)}; ${t2.toFixed(4)}; ${t3.toFixed(4)}; 1`;
           const keyPoints = `0; 1; 1; 0; 0`;
 
           return (
-            <React.Fragment key={index}>
+            <React.Fragment key={lineKey}>
               <line
-                x1={`${from.x}%`}
-                y1={`${from.y}%`}
-                x2={`${to.x}%`}
-                y2={`${to.y}%`}
+                x1={`${from.x}%`} y1={`${from.y}%`}
+                x2={`${to.x}%`}   y2={`${to.y}%`}
                 stroke={line.upgraded ? 'blue' : 'red'}
                 strokeWidth="2"
+                strokeDasharray={line.isDisrupted ? '6 4' : 'none'}
+                strokeOpacity={line.isDisrupted ? 0.5 : 1}
                 onClick={(e) => onLineClick(e, line)}
               />
+
+              {/* Issue 1: X mark on disrupted lines */}
+              {line.isDisrupted && (
+                <>
+                  <line x1={midPx.x - 8} y1={midPx.y - 8} x2={midPx.x + 8} y2={midPx.y + 8}
+                    stroke="orange" strokeWidth="3" strokeLinecap="round" />
+                  <line x1={midPx.x + 8} y1={midPx.y - 8} x2={midPx.x - 8} y2={midPx.y + 8}
+                    stroke="orange" strokeWidth="3" strokeLinecap="round" />
+                </>
+              )}
+
               <path
                 id={pathId}
                 d={`M ${fromPx.x} ${fromPx.y} L ${toPx.x} ${toPx.y}`}
-                fill="none"
-                stroke="none"
+                fill="none" stroke="none"
               />
-              <circle r="3" fill="yellow">
-                <animateMotion
-                  dur={`${totalDuration}s`}
-                  repeatCount="indefinite"
-                  calcMode="spline"
-                  keyTimes={keyTimes}
-                  keyPoints={keyPoints}
-                  keySplines="0.4 0 0.6 1; 0 0 1 1; 0.4 0 0.6 1; 0 0 1 1"
-                  begin="1s"
-                >
-                  <mpath href={`#${pathId}`} />
-                </animateMotion>
-              </circle>
+
+              {/* Issue 1 & 5: don't animate when disrupted or game over */}
+              {!gameOver && !line.isDisrupted && (
+                <circle r="3" fill="yellow">
+                  <animateMotion
+                    dur={`${totalDuration}s`}
+                    repeatCount="indefinite"
+                    calcMode="spline"
+                    keyTimes={keyTimes}
+                    keyPoints={keyPoints}
+                    keySplines="0.4 0 0.6 1; 0 0 1 1; 0.4 0 0.6 1; 0 0 1 1"
+                    begin="1s"
+                  >
+                    <mpath href={`#${pathId}`} />
+                  </animateMotion>
+                </circle>
+              )}
             </React.Fragment>
           );
         })}

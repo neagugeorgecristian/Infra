@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import EuropeSVGMap from './EuropeSVGMap';
+import { COUNTRY_CITIES, UNLOCK_COSTS } from '../scenarios/europe';
 import SVGMap from './SVGMap';
 import LineOptions from './LineOptions';
 import InfoPanel from './InfoPanel';
@@ -14,12 +16,43 @@ import ObjectivePanel from './ObjectivePanel';
 
 import './Map.css';
 
-function Map({ svgMap, cities, scenarioName }) {
+const OBJECTIVES = [
+  {
+    label: "Connect all starting cities",
+    check: ({ lines, initialCities }) => {
+      const connected = new Set();
+      lines.filter(l => !l.isDeleted).forEach(l => {
+        connected.add(l.points[0].cityName);
+        connected.add(l.points[1].cityName);
+      });
+      return initialCities.every(c => connected.has(c.cityName));
+    }
+  },
+  {
+    label: "Reach €1200 before the rush",
+    check: ({ money }) => money >= 1200
+  },
+  {
+    label: "Keep all cities above 30% satisfaction",
+    check: ({ satisfactionMap }) => Object.values(satisfactionMap).every(s => s >= 30)
+  },
+  {
+    label: "Survive the demand surge",
+    check: ({ satisfactionMap }) => Object.values(satisfactionMap).every(s => s > 0)
+  },
+  {
+    label: "Maintain 3 happy cities",
+    check: ({ satisfactionMap }) => Object.values(satisfactionMap).filter(s => s >= 60).length >= 3
+  }
+];
+
+function Map({ svgMap, cities, scenarioName, scenarioType }) {
   const [selectedMarkers, setSelectedMarkers] = useState([]);
 
   const [lines, setLines] = useState(() => {
     if (cities.length < 2) return [];
     return [{
+      id: Date.now(),
       points: [cities[0], cities[1]],
       className: 'singleline',
       speedMultiplier: 0.5
@@ -49,28 +82,64 @@ function Map({ svgMap, cities, scenarioName }) {
   const [activeCities, setActiveCities] = useState(cities);
   const [newCityFlash, setNewCityFlash] = useState(null);
   const [passengersDelivered, setPassengersDelivered] = useState(0);
+  const [unlockedCountries, setUnlockedCountries] = useState(['romania']);
+
+  const [gameOverType, setGameOverType] = useState(null); // null | 'timeout' | 'collapse'
+  const [completedObjectives, setCompletedObjectives] = useState([]);
 
   const timerRef = useRef(null);
   const moneyRef = useRef(money);
   const satisfactionRef = useRef(satisfactionMap);
   const linesRef = useRef(lines);
   const passengersRef = useRef(0);
+  const gameOverRef = useRef(false);
+  const zeroCitiesRef = useRef({});
+  const completedObjectivesRef = useRef([]);
+  const prevPhaseRef = useRef(0);
 
   useEffect(() => { moneyRef.current = money; }, [money]);
   useEffect(() => { satisfactionRef.current = satisfactionMap; }, [satisfactionMap]);
   useEffect(() => { linesRef.current = lines; }, [lines]);
   useEffect(() => { passengersRef.current = passengersDelivered; }, [passengersDelivered]);
+  useEffect(() => { completedObjectivesRef.current = completedObjectives; }, [completedObjectives]);
+
+  // Stop all intervals the moment game over is set
+  useEffect(() => {
+    if (gameOverMessage) {
+      gameOverRef.current = true;
+      clearInterval(timerRef.current);
+    }
+  }, [gameOverMessage]);
 
   const gamePhase = timeLeft > 300 ? 0
-    : timeLeft > 240 ? 1
-    : timeLeft > 180 ? 2
-    : timeLeft > 120 ? 3
-    : timeLeft > 60  ? 4
-    : 5;
+  : timeLeft > 240 ? 1
+  : timeLeft > 180 ? 2
+  : timeLeft > 120 ? 3
+  : timeLeft > 60  ? 4
+  : 5;
+
+  // Check objective when phase advances
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    if (gamePhase > prev && prev < OBJECTIVES.length && !gameOverRef.current) {
+      const completed = OBJECTIVES[prev].check({
+        lines: linesRef.current,
+        initialCities: cities,
+        money: moneyRef.current,
+        satisfactionMap: satisfactionRef.current
+      });
+      if (completed) {
+        setCompletedObjectives(p => [...p, prev]);
+      }
+    }
+    prevPhaseRef.current = gamePhase;
+  }, [gamePhase]);
+
+
 
   const { activeEvent } = useEventSystem({
     gamePhase,
-    lines,
+    linesRef,
     setLines,
     setMoney,
     active: !gameOverMessage
@@ -97,28 +166,24 @@ function Map({ svgMap, cities, scenarioName }) {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          const avgSatisfaction =
-            Object.values(satisfactionRef.current).reduce((a, b) => a + b, 0) / cities.length;
-
-          if (moneyRef.current >= TARGET_MONEY && avgSatisfaction >= 50) {
-            setGameOverMessage("🎉 Congratulations! Your cities are thriving.");
-          } else if (moneyRef.current < TARGET_MONEY) {
-            setGameOverMessage("💸 Not enough funding — infrastructure collapsed.");
-          } else {
-            setGameOverMessage("😞 Cities too unhappy — you were voted out.");
-          }
+          const count = completedObjectivesRef.current.length;
+          const medal = count >= 5 ? '🥇 Gold' : count >= 3 ? '🥈 Silver' : '🥉 Bronze';
+          const satVals = Object.values(satisfactionRef.current);
+          const avgSatisfaction = satVals.reduce((a, b) => a + b, 0) / satVals.length;
+          setGameOverType('timeout');
+          setGameOverMessage(`${medal} — ${count}/5 objectives completed`);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timerRef.current);
   }, []);
 
-  // Income + satisfaction + passengers
   useEffect(() => {
     const incomeInterval = setInterval(() => {
+      if (gameOverRef.current) return; // Issue 5: stop after game over
+
       const currentLines = linesRef.current;
       const currentSatisfaction = satisfactionRef.current;
 
@@ -142,17 +207,14 @@ function Map({ svgMap, cities, scenarioName }) {
           )
         ).length;
 
-        // AFTER
         if (!isConnected) {
           const decayRate = satisfaction > 50 ? 8 : 4;
           updatedSatisfaction[city] = Math.max(0, satisfaction - decayRate);
         } else if (connectionCount === 1) {
-          // Single connection — very slow decay, not enough to thrive
           updatedSatisfaction[city] = Math.max(0, satisfaction - 1);
         } else {
-          // 2+ connections — grows, faster with more links
           const growthRate = Math.min((connectionCount - 1) * 3, 9);
-          updatedSatisfaction[city] = Math.min(100, satisfaction + growthRate);
+          updatedSatisfaction[city] = Math.min(100, satisfaction + growthRate); // Issue 6: hard cap
 
           const hasUpgrade = currentLines.some(l =>
             !l.isDeleted &&
@@ -162,6 +224,21 @@ function Map({ svgMap, cities, scenarioName }) {
           if (hasUpgrade) {
             updatedSatisfaction[city] = Math.min(100, updatedSatisfaction[city] + 3);
           }
+        }
+      }
+
+      // Issue 4: collapse if any city sits at 0 for 2 consecutive ticks (10s)
+      for (const [city, sat] of Object.entries(updatedSatisfaction)) {
+        if (sat <= 0) {
+          zeroCitiesRef.current[city] = (zeroCitiesRef.current[city] || 0) + 1;
+          if (zeroCitiesRef.current[city] >= 2) {
+            gameOverRef.current = true; // set immediately so no further ticks fire
+            setGameOverType('collapse');
+            setGameOverMessage(`💥 Infrastructure crumbled — ${city} was abandoned.`);
+            return;
+          }
+        } else {
+          zeroCitiesRef.current[city] = 0;
         }
       }
 
@@ -183,11 +260,9 @@ function Map({ svgMap, cities, scenarioName }) {
         }
       }
 
-      // Upkeep per active line
       const upkeepCost = currentLines.filter(l => !l.isDeleted).length * 3;
       totalIncome -= upkeepCost;
 
-      // Passengers delivered this tick
       const newPassengers = Object.entries(currentSatisfaction)
         .filter(([city]) => connectedCities.has(city))
         .reduce((sum, [, sat]) => sum + Math.floor(sat / 20), 0);
@@ -208,6 +283,21 @@ function Map({ svgMap, cities, scenarioName }) {
     }
     alert(`Not enough money! Required: €${amount}, Available: €${moneyRef.current}`);
     return false;
+  };
+
+  const handleUnlockCountry = (country) => {
+    const cost = UNLOCK_COSTS[country];
+    if (!cost) return;
+    trySpendMoney(cost, () => {
+      setUnlockedCountries(prev => [...prev, country]);
+      const newCities = COUNTRY_CITIES[country];
+      setActiveCities(prev => [...prev, ...newCities]);
+      setSatisfactionMap(prev => {
+        const updated = { ...prev };
+        newCities.forEach(c => { updated[c.cityName] = 50; });
+        return updated;
+      });
+    });
   };
 
   const handleMarkerSelect = ({ x, y, cityName }) => {
@@ -232,7 +322,7 @@ function Map({ svgMap, cities, scenarioName }) {
 
       const cost = calculateLineCost(point1, point2);
       trySpendMoney(cost, () => {
-        setLines(prev => [...prev, { points: [point1, point2], className: 'singleline', speedMultiplier: 0.5 }]);
+        setLines(prev => [...prev, { id: Date.now(), points: [point1, point2], className: 'singleline', speedMultiplier: 0.5 }]);
         setSelectedMarkers([]);
       });
     } else {
@@ -280,14 +370,14 @@ function Map({ svgMap, cities, scenarioName }) {
       if (!trySpendMoney(Math.round(baseCost * 1.5), () => {})) return;
       setLines(prev => prev.map(line =>
         line === target
-          ? { ...line, className: 'doubleline', upgraded: true, speedMultiplier: 0.75 }
+          ? { ...line, id: Date.now(), className: 'doubleline', upgraded: true, speedMultiplier: 0.75 }
           : line
       ));
     } else {
       setMoney(prev => prev + Math.round(baseCost * 0.5));
       setLines(prev => prev.map(line =>
         line === target
-          ? { ...line, className: 'singleline', upgraded: false, speedMultiplier: 0.5 }
+          ? { ...line, id: Date.now(), className: 'singleline', upgraded: false, speedMultiplier: 0.5 }
           : line
       ));
     }
@@ -312,16 +402,33 @@ function Map({ svgMap, cities, scenarioName }) {
       <MoneyPanel money={money} />
       <LegendPanel />
       <EventBanner event={activeEvent} />
-      <SVGMap
-        lines={lines}
-        onLineClick={handleLineClick}
-        cities={activeCities}
-        svgFile={svgMap}
-        onMarkerClick={handleMarkerSelect}
-        selectedMarkers={selectedMarkers}
-        satisfactionMap={satisfactionMap}
-        newCityFlash={newCityFlash}
-      />
+      {scenarioType === 'europe' ? (
+        <EuropeSVGMap
+          lines={lines}
+          onLineClick={handleLineClick}
+          cities={activeCities}
+          onMarkerClick={handleMarkerSelect}
+          selectedMarkers={selectedMarkers}
+          satisfactionMap={satisfactionMap}
+          newCityFlash={newCityFlash}
+          gameOver={!!gameOverMessage}
+          unlockedCountries={unlockedCountries}
+          onUnlockCountry={handleUnlockCountry}
+          money={money}
+        />
+      ) : (
+        <SVGMap
+          lines={lines}
+          onLineClick={handleLineClick}
+          cities={activeCities}
+          svgFile={svgMap}
+          onMarkerClick={handleMarkerSelect}
+          selectedMarkers={selectedMarkers}
+          satisfactionMap={satisfactionMap}
+          newCityFlash={newCityFlash}
+          gameOver={!!gameOverMessage}
+        />
+      )}
 
       {lineOptions.visible && (
         <LineOptions
@@ -360,35 +467,38 @@ function Map({ svgMap, cities, scenarioName }) {
         }}>
           ⏱ {timeLeft}s
         </div>
-        {!gameOverMessage && <ObjectivePanel gamePhase={gamePhase} />}
+        {!gameOverMessage && <ObjectivePanel gamePhase={gamePhase} completedCount={completedObjectives.length} />}
       </div>
 
       {gameOverMessage && (
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: '#111', color: 'white',
-          padding: '40px', borderRadius: '16px',
-          fontSize: '18px', textAlign: 'center',
-          zIndex: 1000, minWidth: '320px',
-          border: '2px solid #444'
-        }}>
-          <div style={{ fontSize: '28px', marginBottom: '16px' }}>{gameOverMessage}</div>
-          <div style={{ marginBottom: '8px' }}>🧳 Passengers delivered: <strong>{passengersDelivered}</strong></div>
-          <div style={{ marginBottom: '8px' }}>
-            😊 Avg satisfaction: <strong>
-              {Math.round(Object.values(satisfactionMap).reduce((a, b) => a + b, 0) / cities.length)}%
-            </strong>
-          </div>
-          <div style={{ marginBottom: '8px' }}>💰 Final balance: <strong>€{money}</strong></div>
-          <div style={{ marginBottom: '24px', fontSize: '22px' }}>
-            {passengersDelivered >= 100 && money >= TARGET_MONEY ? '🥇 Gold'
-              : passengersDelivered >= 60 || money >= TARGET_MONEY ? '🥈 Silver'
-              : '🥉 Bronze'}
-          </div>
-          <button onClick={() => window.location.reload()}>Play Again</button>
-        </div>
-      )}
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        background: '#111', color: 'white',
+        padding: '40px', borderRadius: '16px',
+        fontSize: '18px', textAlign: 'center',
+        zIndex: 1000, minWidth: '320px',
+        border: '2px solid #444'
+      }}>
+        <div style={{ fontSize: '28px', marginBottom: '20px' }}>{gameOverMessage}</div>
+
+        {gameOverType === 'timeout' && (
+          <>
+            <div style={{ marginBottom: '8px' }}>🧳 Passengers: <strong>{passengersDelivered}</strong></div>
+            <div style={{ marginBottom: '8px' }}>
+              😊 Avg satisfaction: <strong>{(() => {
+                const vals = Object.values(satisfactionMap);
+                return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+              })()}%</strong>
+            </div>
+            <div style={{ marginBottom: '8px' }}>💰 Final balance: <strong>€{money}</strong></div>
+            <div style={{ marginBottom: '20px' }}>🎯 Objectives: <strong>{completedObjectives.length}/5</strong></div>
+          </>
+        )}
+
+        <button onClick={() => window.location.reload()}>Play Again</button>
+      </div>
+    )}
 
 
     </div>

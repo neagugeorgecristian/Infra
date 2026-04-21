@@ -9,7 +9,8 @@ function HomePage() {
   const scenarios = [
     { id: 'romania', label: 'Romania Scenario' },
     { id: 'bulgaria', label: 'Bulgaria Scenario' },
-    { id: 'moldova', label: 'Moldova Scenario' }
+    { id: 'moldova', label: 'Moldova Scenario' },
+    { id: 'europe', label: 'Europe - Balkans Unlock' }
   ];
 
   return (

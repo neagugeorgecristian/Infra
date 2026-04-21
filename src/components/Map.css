@@ -35,3 +35,11 @@
   stroke-width: 4px;
   fill: none;
 }
+
+/* Ensures ReactSVG wrapper + injected SVG fill their country container */
+.country-svg-container > div,
+.country-svg-container svg {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
