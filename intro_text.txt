@@ -1,0 +1,7 @@
+Welcome to infra. The world is switching to alternative modes of transport. 
+
+Each city has a satisfaction level. Keep your passengers happy by connecting - but be careful, you have a limited number of connections each level - 
+
+Each completed route earns you money - the faster the route, the more money you can make. If satisfaction drops, the money you receive will also drop.
+
+Try to find the most optimal solution for each level

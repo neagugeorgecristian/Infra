@@ -322,7 +322,21 @@ function Map({ svgMap, cities, scenarioName, scenarioType }) {
 
       const cost = calculateLineCost(point1, point2);
       trySpendMoney(cost, () => {
-        setLines(prev => [...prev, { id: Date.now(), points: [point1, point2], className: 'singleline', speedMultiplier: 0.5 }]);
+        const newLine = {
+          id: Date.now(),
+          points: [point1, point2],
+          className: 'singleline',
+          speedMultiplier: 0.5,
+          isNew: true,
+        };
+        setLines(prev => [...prev, newLine]);
+
+        // Clear isNew after the draw animation finishes (1.1s = animation duration + buffer)
+        setTimeout(() => {
+          setLines(prev =>
+            prev.map(l => l.id === newLine.id ? { ...l, isNew: false } : l)
+          );
+        }, 1100);
         setSelectedMarkers([]);
       });
     } else {
@@ -405,6 +419,7 @@ function Map({ svgMap, cities, scenarioName, scenarioType }) {
       {scenarioType === 'europe' ? (
         <EuropeSVGMap
           lines={lines}
+          calculateLineCost={calculateLineCost}
           onLineClick={handleLineClick}
           cities={activeCities}
           onMarkerClick={handleMarkerSelect}
@@ -419,6 +434,7 @@ function Map({ svgMap, cities, scenarioName, scenarioType }) {
       ) : (
         <SVGMap
           lines={lines}
+          calculateLineCost={calculateLineCost}
           onLineClick={handleLineClick}
           cities={activeCities}
           svgFile={svgMap}
