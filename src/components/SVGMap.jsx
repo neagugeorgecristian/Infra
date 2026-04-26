@@ -6,11 +6,41 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                   svgFile, satisfactionMap = {}, newCityFlash, gameOver = false,
                   calculateLineCost }) {
   const svgContainerRef = useRef(null);
+  const svgOverlayRef   = useRef(null);   // ref used for coordinate conversion
   const [viewBox, setViewBox] = useState('0 0 1200 800');
-  const maxWidth = 1200;
+  const maxWidth  = 1200;
   const maxHeight = 1000;
 
   const [hoveredCity, setHoveredCity] = useState(null);
+
+  // ── Ghost line state ─────────────────────────────────────────────────────
+  // mousePos is kept in SVG viewBox coordinates so it aligns perfectly with
+  // all other geometry drawn inside the overlay <svg>.
+  const [mousePos, setMousePos] = useState(null);
+
+  // Clear the ghost line whenever the selection is reset from outside
+  useEffect(() => {
+    if (selectedMarkers.length === 0) setMousePos(null);
+  }, [selectedMarkers]);
+
+  // Convert a DOM mouse event to SVG viewBox coordinates via the CTM
+  const handleMouseMove = (e) => {
+    if (selectedMarkers.length !== 1) return;
+    const svg = svgOverlayRef.current;
+    if (!svg) return;
+    try {
+      const pt  = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+      setMousePos({ x: svgP.x, y: svgP.y });
+    } catch (_) {
+      // getScreenCTM() can fail on unmounted elements – safely ignore
+    }
+  };
+
+  const handleMouseLeave = () => setMousePos(null);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const useSvgContainerSize = (viewBox, maxWidth, maxHeight) => {
     const [, , vbWidth, vbHeight] = viewBox.split(' ').map(Number);
@@ -44,14 +74,29 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
     setSvgSize({ width: containerWidth, height: containerHeight });
   }, [containerWidth, containerHeight]);
 
+  // Precompute ghost-line start point in viewBox coordinates.
+  // cx/cy in SVG percentage syntax resolve to (pct/100 * vbDimension).
+  const ghostStart = (() => {
+    if (selectedMarkers.length !== 1 || !mousePos) return null;
+    const city = selectedMarkers[0];
+    const [, , vbW, vbH] = viewBox.split(' ').map(Number);
+    return {
+      x: (city.x / 100) * vbW,
+      y: (city.y / 100) * vbH,
+    };
+  })();
+
   return (
     <div
       className="map-svg"
       ref={svgContainerRef}
       style={{ width: containerWidth, height: containerHeight, position: 'relative' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
     >
       <ReactSVG src={svgFile} />
       <svg
+        ref={svgOverlayRef}
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         viewBox={viewBox}
         preserveAspectRatio="xMidYMid meet"
@@ -68,7 +113,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
           const pathKey    = getPathKey(from.cityName, to.cityName);
           const customPath = PATH_REGISTRY[pathKey];
 
-          // Resolve waypoints: null entries become the city's own coords (in px)
           const rawWaypoints = customPath
             ? customPath.points.map((wp, i) => {
                 if (wp === null) return i === 0 ? fromPx : toPx;
@@ -76,7 +120,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
               })
             : [fromPx, toPx];
 
-          // If the path was defined CityB→CityA but our line is CityA→CityB, reverse
           const isReversed  = customPath &&
             [from.cityName, to.cityName].sort().join('||').split('||')[0] !== from.cityName;
           const waypoints   = isReversed ? [...rawWaypoints].reverse() : rawWaypoints;
@@ -89,32 +132,21 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
           const lineKey  = line.id || index;
           const pathId   = `path-${lineKey}`;
 
-          // ── Animation timing ────────────────────────────────────────────────
           const { keyTimes, keyPoints, keySplines, totalDuration } =
             buildAnimationKeys(waypoints, segSpeeds);
 
-          // ── Draw animation (only while isNew) ───────────────────────────────
-          // Compute total path length for dashoffset animation
           const pathLen = waypoints.reduce((acc, wp, i) => {
             if (i === 0) return 0;
             const prev = waypoints[i - 1];
             return acc + Math.sqrt((wp.x - prev.x) ** 2 + (wp.y - prev.y) ** 2);
           }, 0);
 
-          // Midpoint for disruption X
           const midPx = waypoints[Math.floor(waypoints.length / 2)];
 
           return (
             <React.Fragment key={lineKey}>
-              {/* Invisible motion path */}
-              <path
-                id={pathId}
-                d={pathD}
-                fill="none"
-                stroke="none"
-              />
+              <path id={pathId} d={pathD} fill="none" stroke="none" />
 
-              {/* Visible track */}
               <path
                 d={pathD}
                 fill="none"
@@ -127,7 +159,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                 onClick={e => onLineClick(e, line)}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Draw animation: line materialises from city A to B */}
                 {line.isNew && (
                   <animate
                     attributeName="stroke-dashoffset"
@@ -143,21 +174,13 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                 )}
               </path>
 
-              {/* Disruption X mark */}
               {line.isDisrupted && midPx && (<>
-                <line
-                  x1={midPx.x - 8} y1={midPx.y - 8}
-                  x2={midPx.x + 8} y2={midPx.y + 8}
-                  stroke="orange" strokeWidth="3" strokeLinecap="round"
-                />
-                <line
-                  x1={midPx.x + 8} y1={midPx.y - 8}
-                  x2={midPx.x - 8} y2={midPx.y + 8}
-                  stroke="orange" strokeWidth="3" strokeLinecap="round"
-                />
+                <line x1={midPx.x - 8} y1={midPx.y - 8} x2={midPx.x + 8} y2={midPx.y + 8}
+                  stroke="orange" strokeWidth="3" strokeLinecap="round" />
+                <line x1={midPx.x + 8} y1={midPx.y - 8} x2={midPx.x - 8} y2={midPx.y + 8}
+                  stroke="orange" strokeWidth="3" strokeLinecap="round" />
               </>)}
 
-              {/* Animated train dot — only after draw animation settles */}
               {!gameOver && !line.isDisrupted && !line.isNew && (
                 <circle r="4" fill="yellow" stroke="#aa8800" strokeWidth="0.5">
                   <animateMotion
@@ -177,6 +200,21 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
           );
         })}
 
+        {/* ── Ghost dotted line: first city → mouse cursor ──────────────── */}
+        {ghostStart && mousePos && (
+          <line
+            x1={ghostStart.x}
+            y1={ghostStart.y}
+            x2={mousePos.x}
+            y2={mousePos.y}
+            stroke="rgba(255,255,255,0.75)"
+            strokeWidth="2"
+            strokeDasharray="10 6"
+            strokeLinecap="round"
+            pointerEvents="none"
+          />
+        )}
+
         {cities.map((city, i) => {
           const { x: cx, y: cy } = percentToPx(city.x, city.y);
           const sat         = satisfactionMap[city.cityName] ?? 50;
@@ -184,7 +222,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
           const isFirstCity = selectedMarkers.length === 1;
           const isHovered   = hoveredCity === city.cityName;
 
-          // Price preview: only shown when one city is selected and this is a different city
           const showPrice = isFirstCity
             && isHovered
             && calculateLineCost
@@ -203,14 +240,12 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
               onMouseEnter={() => setHoveredCity(city.cityName)}
               onMouseLeave={() => setHoveredCity(null)}
             >
-              {/* Selection ring */}
               {isSelected && (
                 <circle cx={`${city.x}%`} cy={`${city.y}%`} r="11"
                   fill="none" stroke="white" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6"
                 />
               )}
 
-              {/* New city pulse ring */}
               {newCityFlash === city.cityName && (
                 <circle cx={`${city.x}%`} cy={`${city.y}%`} r="14"
                   fill="none" stroke="#ffff00" strokeWidth="2" opacity="0.8">
@@ -219,7 +254,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                 </circle>
               )}
 
-              {/* City dot */}
               <circle
                 cx={`${city.x}%`}
                 cy={`${city.y}%`}
@@ -235,7 +269,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                 strokeWidth={newCityFlash === city.cityName ? 2.5 : 1}
               />
 
-              {/* City name */}
               <text
                 x={`${city.x}%`}
                 y={`${city.y - 1.5}%`}
@@ -247,7 +280,6 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                 {city.cityName}
               </text>
 
-              {/* Price badge — shown on hover when first city is selected */}
               {showPrice && (
                 <g style={{ pointerEvents: 'none' }}>
                   <rect

@@ -5,6 +5,7 @@ import romania from '../scenarios/romania';
 import bulgaria from '../scenarios/bulgaria';
 import moldova from '../scenarios/moldova';
 import europeScenario from '../scenarios/europe';
+import balkans from '../scenarios/balkans';
 
 function GamePage({ selectedMarkers, onMarkerClick }) {
   const { id } = useParams();
@@ -13,6 +14,7 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
     romania,
     bulgaria,
     moldova,
+    balkans,
     europe: europeScenario
   };
 

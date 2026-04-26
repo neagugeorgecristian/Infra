@@ -10,6 +10,7 @@ function HomePage() {
     { id: 'romania', label: 'Romania Scenario' },
     { id: 'bulgaria', label: 'Bulgaria Scenario' },
     { id: 'moldova', label: 'Moldova Scenario' },
+    { id: 'balkans', label: 'Balkans Scenario'},
     { id: 'europe', label: 'Europe - Balkans Unlock' }
   ];
 

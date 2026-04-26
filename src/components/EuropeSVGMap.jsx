@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
 import { COUNTRY_LAYOUT, COUNTRY_FILES, UNLOCK_COSTS } from '../scenarios/europe';
 
@@ -10,13 +10,50 @@ function EuropeSVGMap({
   satisfactionMap = {}, newCityFlash, gameOver = false,
   unlockedCountries, onUnlockCountry, money,
 }) {
+  const svgOverlayRef = useRef(null);
+
+  // ── Ghost line state ─────────────────────────────────────────────────────
+  // Coordinates are in the W×H (1200×1000) viewBox space.
+  const [mousePos, setMousePos] = useState(null);
+
+  // Clear when the selection is reset from Map.jsx
+  useEffect(() => {
+    if (selectedMarkers.length === 0) setMousePos(null);
+  }, [selectedMarkers]);
+
+  const handleMouseMove = (e) => {
+    if (selectedMarkers.length !== 1) return;
+    const svg = svgOverlayRef.current;
+    if (!svg) return;
+    try {
+      const pt  = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+      setMousePos({ x: svgP.x, y: svgP.y });
+    } catch (_) {}
+  };
+
+  const handleMouseLeave = () => setMousePos(null);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const px = (xPct, yPct) => ({
     x: (xPct / 100) * W,
     y: (yPct / 100) * H,
   });
 
+  // Start point of the ghost line (W×H space)
+  const ghostStart = selectedMarkers.length === 1 && mousePos
+    ? px(selectedMarkers[0].x, selectedMarkers[0].y)
+    : null;
+
   return (
-    <div className="map-svg" style={{ width: W, height: H, position: 'relative' }}>
+    <div
+      className="map-svg"
+      style={{ width: W, height: H, position: 'relative' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
 
       {/* ── Country SVG backgrounds ─────────────────────────────────── */}
       {Object.entries(COUNTRY_LAYOUT).map(([country, l]) => {
@@ -30,7 +67,6 @@ function EuropeSVGMap({
             left: `${l.left}%`, top: `${l.top}%`,
             width: `${l.width}%`, height: `${l.height}%`,
           }}>
-            {/* SVG with greyscale filter when locked */}
             <div className="country-svg-container" style={{
               width: '100%', height: '100%',
               filter: unlocked ? 'none' : 'grayscale(100%) brightness(0.4)',
@@ -42,14 +78,12 @@ function EuropeSVGMap({
                 beforeInjection={svg => {
                   svg.setAttribute('width',  '100%');
                   svg.setAttribute('height', '100%');
-                  // stretch to fill — slight distortion is acceptable in a game
                   svg.setAttribute('preserveAspectRatio', 'none');
                   svg.style.display = 'block';
                 }}
               />
             </div>
 
-            {/* Unlock button, centred over the greyed country */}
             {!unlocked && cost !== undefined && (
               <div style={{
                 position: 'absolute', top: '50%', left: '50%',
@@ -77,8 +111,9 @@ function EuropeSVGMap({
         );
       })}
 
-      {/* ── Lines + city markers overlay ────────────────────────────── */}
+      {/* ── Lines + city markers + ghost line overlay ───────────────── */}
       <svg
+        ref={svgOverlayRef}
         style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="xMidYMid meet"
@@ -137,6 +172,21 @@ function EuropeSVGMap({
             </React.Fragment>
           );
         })}
+
+        {/* ── Ghost dotted line: first city → mouse cursor ──────────── */}
+        {ghostStart && mousePos && (
+          <line
+            x1={ghostStart.x}
+            y1={ghostStart.y}
+            x2={mousePos.x}
+            y2={mousePos.y}
+            stroke="rgba(255,255,255,0.75)"
+            strokeWidth="2"
+            strokeDasharray="10 6"
+            strokeLinecap="round"
+            pointerEvents="none"
+          />
+        )}
 
         {cities.map((city, i) => {
           const { x: cx, y: cy } = px(city.x, city.y);
