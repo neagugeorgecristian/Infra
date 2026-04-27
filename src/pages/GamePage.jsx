@@ -28,6 +28,7 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
       cities={scenario.cities} 
       scenarioName={scenario.name}
       scenarioType={scenario.type}
+      regionUnlock={scenario.regionUnlock}
     />
   );
 }

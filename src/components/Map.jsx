@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import EuropeSVGMap from './EuropeSVGMap';
-import { COUNTRY_CITIES, UNLOCK_COSTS } from '../scenarios/europe';
+import RegionUnlockSVGMap from './RegionUnlockSVGMap';
 import SVGMap from './SVGMap';
 import LineOptions from './LineOptions';
 import InfoPanel from './InfoPanel';
@@ -46,7 +46,7 @@ const OBJECTIVES = [
   }
 ];
 
-function Map({ svgMap, cities, scenarioName, scenarioType }) {
+function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
   const [selectedMarkers, setSelectedMarkers] = useState([]);
 
   const [lines, setLines] = useState(() => {
@@ -82,7 +82,9 @@ function Map({ svgMap, cities, scenarioName, scenarioType }) {
   const [activeCities, setActiveCities] = useState(cities);
   const [newCityFlash, setNewCityFlash] = useState(null);
   const [passengersDelivered, setPassengersDelivered] = useState(0);
-  const [unlockedCountries, setUnlockedCountries] = useState(['romania']);
+  const [unlockedRegions, setUnlockedRegions] = useState(
+    () => regionUnlock?.initialUnlocked ?? []
+  );
 
   const [gameOverType, setGameOverType] = useState(null); // null | 'timeout' | 'collapse'
   const [completedObjectives, setCompletedObjectives] = useState([]);
@@ -285,19 +287,31 @@ function Map({ svgMap, cities, scenarioName, scenarioType }) {
     return false;
   };
 
-  const handleUnlockCountry = (country) => {
-    const cost = UNLOCK_COSTS[country];
-    if (!cost) return;
-    trySpendMoney(cost, () => {
-      setUnlockedCountries(prev => [...prev, country]);
-      const newCities = COUNTRY_CITIES[country];
+  const handleUnlockRegion = (regionId) => {
+    if (!regionUnlock?.regions?.[regionId]) return;
+    if (unlockedRegions.includes(regionId)) return;
+
+    const cfg = regionUnlock.regions[regionId];
+    const cost = cfg.unlockCost ?? 0;
+
+    const commitUnlock = () => {
+      setUnlockedRegions(prev => [...prev, regionId]);
+
+      const newCities = cfg.cities ?? [];
       setActiveCities(prev => [...prev, ...newCities]);
       setSatisfactionMap(prev => {
         const updated = { ...prev };
         newCities.forEach(c => { updated[c.cityName] = 50; });
         return updated;
       });
-    });
+    };
+
+    if (cost <= 0) {
+      commitUnlock();
+      return;
+    }
+
+    trySpendMoney(cost, commitUnlock);
   };
 
   const handleMarkerSelect = ({ x, y, cityName }) => {
@@ -427,8 +441,25 @@ function Map({ svgMap, cities, scenarioName, scenarioType }) {
           satisfactionMap={satisfactionMap}
           newCityFlash={newCityFlash}
           gameOver={!!gameOverMessage}
-          unlockedCountries={unlockedCountries}
-          onUnlockCountry={handleUnlockCountry}
+          unlockedCountries={unlockedRegions}
+          onUnlockCountry={handleUnlockRegion}
+          money={money}
+        />
+      ) : scenarioType === 'svg-region-unlock' ? (
+        <RegionUnlockSVGMap
+          lines={lines}
+          calculateLineCost={calculateLineCost}
+          onLineClick={handleLineClick}
+          cities={activeCities}
+          svgFile={svgMap}
+          onMarkerClick={handleMarkerSelect}
+          selectedMarkers={selectedMarkers}
+          satisfactionMap={satisfactionMap}
+          newCityFlash={newCityFlash}
+          gameOver={!!gameOverMessage}
+          regionUnlock={regionUnlock}
+          unlockedRegions={unlockedRegions}
+          onUnlockRegion={handleUnlockRegion}
           money={money}
         />
       ) : (

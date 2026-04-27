@@ -4,7 +4,7 @@ import { getPathKey, PATH_REGISTRY, buildPathD, buildAnimationKeys } from './pat
 
 function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                   svgFile, satisfactionMap = {}, newCityFlash, gameOver = false,
-                  calculateLineCost }) {
+                  calculateLineCost, svgBeforeInjection, svgRenderKey  }) {
   const svgContainerRef = useRef(null);
   const svgOverlayRef   = useRef(null);   // ref used for coordinate conversion
   const [viewBox, setViewBox] = useState('0 0 1200 800');
@@ -94,10 +94,14 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      <ReactSVG src={svgFile} />
+      <ReactSVG
+        key={svgRenderKey || svgFile}
+        src={svgFile}
+        beforeInjection={svgBeforeInjection}
+      />
       <svg
         ref={svgOverlayRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         viewBox={viewBox}
         preserveAspectRatio="xMidYMid meet"
       >
@@ -157,7 +161,7 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
                 strokeOpacity={line.isDisrupted ? 0.4 : 1}
                 strokeLinecap="round"
                 onClick={e => onLineClick(e, line)}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: 'pointer', pointerEvents: 'auto' }}
               >
                 {line.isNew && (
                   <animate
@@ -235,7 +239,7 @@ function SVGMap({ lines, onLineClick, cities, selectedMarkers, onMarkerClick,
             <g
               key={i}
               className="city-marker"
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: 'pointer', pointerEvents: 'auto' }}
               onClick={() => onMarkerClick(city)}
               onMouseEnter={() => setHoveredCity(city.cityName)}
               onMouseLeave={() => setHoveredCity(null)}
