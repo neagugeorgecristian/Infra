@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import EuropeSVGMap from './EuropeSVGMap';
 import RegionUnlockSVGMap from './RegionUnlockSVGMap';
 import SVGMap from './SVGMap';
 import LineOptions from './LineOptions';
@@ -13,6 +12,7 @@ import { calculateLineCost } from './utils.js';
 import { useEventSystem, EventBanner } from './EventSystem';
 import { SPAWNABLE_CITIES } from './CitySpawner';
 import ObjectivePanel from './ObjectivePanel';
+import { evaluateTypedFlow } from './PuzzleFlow';
 
 import './Map.css';
 
@@ -46,7 +46,10 @@ const OBJECTIVES = [
   }
 ];
 
-function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
+function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
+  const isPuzzleMode = scenarioType === 'puzzle-typed-flow';
+  const initialBudget = scenario?.budget ?? 1000;
+
   const [selectedMarkers, setSelectedMarkers] = useState([]);
 
   const [lines, setLines] = useState(() => {
@@ -67,7 +70,7 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
 
   const navigate = useNavigate();
   const [infoCity, setInfoCity] = useState(null);
-  const [money, setMoney] = useState(1000);
+  const [money, setMoney] = useState(initialBudget);
 
   const GAME_DURATION = 360;
   const TARGET_MONEY = 2500;
@@ -98,6 +101,10 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
   const zeroCitiesRef = useRef({});
   const completedObjectivesRef = useRef([]);
   const prevPhaseRef = useRef(0);
+
+  const [puzzleStats, setPuzzleStats] = useState(() =>
+    isPuzzleMode ? evaluateTypedFlow({ cities, lines: [] }) : null
+  );
 
   useEffect(() => { moneyRef.current = money; }, [money]);
   useEffect(() => { satisfactionRef.current = satisfactionMap; }, [satisfactionMap]);
@@ -144,7 +151,7 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
     linesRef,
     setLines,
     setMoney,
-    active: !gameOverMessage
+    active: !gameOverMessage && !isPuzzleMode
   });
 
   // City spawning
@@ -164,6 +171,7 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
 
   // Timer
   useEffect(() => {
+    if (isPuzzleMode) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -180,7 +188,7 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, []);
+  }, [isPuzzleMode]);
 
   useEffect(() => {
     const incomeInterval = setInterval(() => {
@@ -276,6 +284,18 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
 
     return () => clearInterval(incomeInterval);
   }, []);
+
+  useEffect(() => {
+    if (!isPuzzleMode || gameOverMessage) return;
+
+    const stats = evaluateTypedFlow({ cities: activeCities, lines });
+    setPuzzleStats(stats);
+
+    if (stats.allDemandsMet) {
+      setGameOverType('timeout');
+      setGameOverMessage('✅ All required resources delivered!');
+    }
+  }, [isPuzzleMode, activeCities, lines, gameOverMessage]);
 
   const trySpendMoney = (amount, onSuccess) => {
     if (moneyRef.current >= amount) {
@@ -428,24 +448,9 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
     <div className="map-container" onClick={handleMapClick}>
       <NavigatorPanel onBack={handleBackToMenu} />
       <MoneyPanel money={money} />
-      <LegendPanel />
+      <LegendPanel isPuzzleMode={isPuzzleMode} />
       <EventBanner event={activeEvent} />
-      {scenarioType === 'europe' ? (
-        <EuropeSVGMap
-          lines={lines}
-          calculateLineCost={calculateLineCost}
-          onLineClick={handleLineClick}
-          cities={activeCities}
-          onMarkerClick={handleMarkerSelect}
-          selectedMarkers={selectedMarkers}
-          satisfactionMap={satisfactionMap}
-          newCityFlash={newCityFlash}
-          gameOver={!!gameOverMessage}
-          unlockedCountries={unlockedRegions}
-          onUnlockCountry={handleUnlockRegion}
-          money={money}
-        />
-      ) : scenarioType === 'svg-region-unlock' ? (
+      {scenarioType === 'svg-region-unlock' ? (
         <RegionUnlockSVGMap
           lines={lines}
           calculateLineCost={calculateLineCost}
@@ -514,7 +519,11 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
         }}>
           ⏱ {timeLeft}s
         </div>
-        {!gameOverMessage && <ObjectivePanel gamePhase={gamePhase} completedCount={completedObjectives.length} />}
+        {!gameOverMessage && <ObjectivePanel
+          gamePhase={gamePhase}
+          completedCount={completedObjectives.length}
+          objectives={isPuzzleMode ? scenario?.objectives : undefined} /> 
+        }
       </div>
 
       {gameOverMessage && (
@@ -540,6 +549,23 @@ function Map({ svgMap, cities, scenarioName, scenarioType, regionUnlock }) {
             </div>
             <div style={{ marginBottom: '8px' }}>💰 Final balance: <strong>€{money}</strong></div>
             <div style={{ marginBottom: '20px' }}>🎯 Objectives: <strong>{completedObjectives.length}/5</strong></div>
+          </>
+        )}
+
+        {isPuzzleMode && puzzleStats && (
+          <>
+            <div style={{ marginBottom: '8px' }}>
+              🔌 Needs Met: <strong>{puzzleStats.metNeeds}/{puzzleStats.totalNeeds}</strong>
+            </div>
+            <div style={{ marginBottom: '8px' }}>
+              📊 Efficiency: <strong>{puzzleStats.efficiency}%</strong>
+            </div>
+            <div style={{ marginBottom: '8px' }}>
+              💰 Spent: <strong>€{Math.max(0, initialBudget - money)}</strong>
+            </div>
+            <div style={{ marginBottom: '20px' }}>
+              🧩 Connections: <strong>{lines.filter(l => !l.isDeleted).length}</strong>
+            </div>
           </>
         )}
 

@@ -1,7 +1,17 @@
 import React from 'react';
 import './LegendPanel.css';
 
-function LegendPanel() {
+function LegendPanel({ isPuzzleMode = false }) {
+  if (isPuzzleMode) {
+    return (
+      <div className="legend-panel">
+        <div className="legend-title">Resource types</div>
+        <div className="legend-item"><span>🔵 Water</span></div>
+        <div className="legend-item"><span>🔴 Energy</span></div>
+      </div>
+    );
+  }
+
   return (
     <div className="legend-panel">
       <div className="legend-title">Line speeds</div>

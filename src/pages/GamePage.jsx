@@ -4,8 +4,8 @@ import Map from '../components/Map';
 import romania from '../scenarios/romania';
 import bulgaria from '../scenarios/bulgaria';
 import moldova from '../scenarios/moldova';
-import europeScenario from '../scenarios/europe';
 import balkans from '../scenarios/balkans';
+import infraPuzzleScenarios from '../scenarios/infraPuzzleLevels';
 
 function GamePage({ selectedMarkers, onMarkerClick }) {
   const { id } = useParams();
@@ -15,7 +15,7 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
     bulgaria,
     moldova,
     balkans,
-    europe: europeScenario
+    ...infraPuzzleScenarios
   };
 
   const scenario = scenarioMap[id];
@@ -23,7 +23,8 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
   if (!scenario) return <p>Scenario not found</p>;
 
   return (
-    <Map 
+    <Map
+      scenario={scenario} 
       svgMap={scenario.svgMap} 
       cities={scenario.cities} 
       scenarioName={scenario.name}

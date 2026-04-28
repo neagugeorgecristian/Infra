@@ -9,7 +9,7 @@ const REGION_UNLOCK = {
       unlockCost: 0,
       cities: [
         { x: 39, y: 28, cityName: 'Cluj' },
-        { x: 79, y: 73, cityName: 'Constanța' },
+        { x: 67, y: 73, cityName: 'Constanța' },
       ],
     },
     MD: {
@@ -24,8 +24,8 @@ const REGION_UNLOCK = {
       label: 'Bulgaria',
       unlockCost: 800,
       cities: [
-        { x: 27, y: 39, cityName: 'Sofia' },
-        { x: 79, y: 29, cityName: 'Varna' },
+        { x: 36, y: 90, cityName: 'Sofia' },
+        { x: 63, y: 85, cityName: 'Varna' },
       ],
     },
   },

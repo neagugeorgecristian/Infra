@@ -16,6 +16,12 @@ function InfoPanel({ info, onClose, satisfactionMap }) {
         <>
           <strong>{data.cityName}</strong>
           <p>Region: {regionMap[data.cityName] || 'Unknown'}</p>
+          {Array.isArray(data.produces) && data.produces.length > 0 && (
+            <p>Produces: {data.produces.join(', ')}</p>
+          )}
+          {Array.isArray(data.needs) && data.needs.length > 0 && (
+            <p>Needs: {data.needs.join(', ')}</p>
+          )}
           <strong>Satisfaction:</strong> {satisfaction}
         </>
       )}

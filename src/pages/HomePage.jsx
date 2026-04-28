@@ -11,7 +11,12 @@ function HomePage() {
     { id: 'bulgaria', label: 'Bulgaria Scenario' },
     { id: 'moldova', label: 'Moldova Scenario' },
     { id: 'balkans', label: 'Balkans Scenario'},
-    { id: 'europe', label: 'Europe - Balkans Unlock' }
+    { id: 'europe', label: 'Europe - Balkans Unlock' },
+    { id: 'infra-l1', label: 'Infra Puzzle L1 – First Pipe' },
+    { id: 'infra-l2', label: 'Infra Puzzle L2 – Branching District' },
+    { id: 'infra-l3', label: 'Infra Puzzle L3 – Tight Budget' },
+    { id: 'infra-l4', label: 'Infra Puzzle L4 – Twin Utilities' },
+    { id: 'infra-l5', label: 'Infra Puzzle L5 – Efficiency Test' },
   ];
 
   return (

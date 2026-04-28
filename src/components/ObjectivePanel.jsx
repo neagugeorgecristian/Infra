@@ -9,7 +9,14 @@ const PHASE_OBJECTIVES = [
   "Hold the network together until time runs out"
 ];
 
-function ObjectivePanel({ gamePhase, completedCount }) {
+function ObjectivePanel({ gamePhase, completedCount, objectives }) {
+  const custom = Array.isArray(objectives) && objectives.length > 0;
+  const objectiveText = custom
+    ? objectives[Math.min(gamePhase, objectives.length - 1)]
+    : PHASE_OBJECTIVES[gamePhase];
+
+  const total = custom ? objectives.length : 5;
+
   return (
     <div style={{
       background: 'rgba(0,0,0,0.75)', color: 'white',
@@ -17,8 +24,8 @@ function ObjectivePanel({ gamePhase, completedCount }) {
       fontSize: '14px', textAlign: 'center',
       whiteSpace: 'nowrap'
     }}>
-      🎯 <strong>Objective:</strong> {PHASE_OBJECTIVES[gamePhase]}
-      <span style={{ marginLeft: '12px', opacity: 0.7 }}>✅ {completedCount}/5</span>
+      🎯 <strong>Objective:</strong> {objectiveText}
+      <span style={{ marginLeft: '12px', opacity: 0.7 }}>✅ {completedCount}/{total}</span>
     </div>
   );
 }
