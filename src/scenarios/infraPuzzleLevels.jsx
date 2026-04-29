@@ -1,33 +1,53 @@
 import balkansSvg from '../assets/balkans.svg';
 
 /**
- * Typed-flow puzzle data (exploratory).
- * Existing engine can safely ignore unknown fields.
+ * Typed-flow puzzle scenarios.
+ *
+ * Each city must declare:
+ *   role        – 'producer' | 'consumer' | 'hybrid'
+ *   produces    – string[]   (resource types this city emits)
+ *   needs       – string[]   (resource types this city requires)
+ *   demand      – { [resource]: number }   (how many units needed)
+ *   supplyPerTick – { [resource]: number } (how many units produced)
+ *
+ * The stars object now contains BOTH human-readable strings AND a
+ * machine-readable `thresholds` block used by PuzzleHUD / calculateStarCount.
  */
 
 const R = {
-  WATER: 'water',
+  WATER:  'water',
   ENERGY: 'energy',
 };
 
 const ROLES = {
   PRODUCER: 'producer',
   CONSUMER: 'consumer',
-  HYBRID: 'hybrid',
+  HYBRID:   'hybrid',
 };
 
+/**
+ * Builds the stars descriptor for a level.
+ * @param {object} p
+ * @param {number} p.budget2           – max spend for 2-star
+ * @param {number} p.budget3           – max spend for 3-star
+ * @param {number} p.maxConnections3   – max connections for 3-star
+ */
 const starTemplate = ({ budget2, budget3, maxConnections3 }) => ({
-  oneStar: 'Complete all required deliveries',
-  twoStar: `Spend <= €${budget2}`,
-  threeStar: `Spend <= €${budget3} and use <= ${maxConnections3} connections`,
+  oneStar:   'Complete all required deliveries',
+  twoStar:   `Spend ≤ €${budget2}`,
+  threeStar: `Spend ≤ €${budget3} and use ≤ ${maxConnections3} connections`,
+  // Machine-readable copy consumed by PuzzleHUD and calculateStarCount
+  thresholds: { budget2, budget3, maxConnections3 },
 });
 
+// ── L1 – First Pipe ──────────────────────────────────────────────────────────
+
 export const infraL1 = {
-  id: 'infra-l1',
-  name: 'Infra L1 – First Pipe',
-  type: 'puzzle-typed-flow',
-  svgMap: balkansSvg,
-  budget: 260,
+  id:        'infra-l1',
+  name:      'Infra L1 – First Pipe',
+  type:      'puzzle-typed-flow',
+  svgMap:    balkansSvg,
+  budget:    260,
   resources: [R.WATER],
   objectives: [
     'Deliver WATER to Old Town',
@@ -37,25 +57,31 @@ export const infraL1 = {
   cities: [
     {
       x: 34, y: 37, cityName: 'Blue Spring',
-      role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.WATER],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.WATER]: 1 },
     },
     {
       x: 56, y: 45, cityName: 'Old Town',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
   ],
 };
 
+// ── L2 – Branching District ──────────────────────────────────────────────────
+
 export const infraL2 = {
-  id: 'infra-l2',
-  name: 'Infra L2 – Branching District',
-  type: 'puzzle-typed-flow',
-  svgMap: balkansSvg,
-  budget: 420,
+  id:        'infra-l2',
+  name:      'Infra L2 – Branching District',
+  type:      'puzzle-typed-flow',
+  svgMap:    balkansSvg,
+  budget:    420,
   resources: [R.WATER],
   objectives: [
     'Deliver WATER to Hill Quarter',
@@ -65,31 +91,39 @@ export const infraL2 = {
   cities: [
     {
       x: 30, y: 42, cityName: 'Reservoir Delta',
-      role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.WATER],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.WATER]: 2 },
     },
     {
       x: 55, y: 32, cityName: 'Hill Quarter',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
     {
       x: 61, y: 56, cityName: 'Port Quarter',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
   ],
 };
 
+// ── L3 – Tight Budget ────────────────────────────────────────────────────────
+
 export const infraL3 = {
-  id: 'infra-l3',
-  name: 'Infra L3 – Tight Budget',
-  type: 'puzzle-typed-flow',
-  svgMap: balkansSvg,
-  budget: 310, // intentionally tight
+  id:        'infra-l3',
+  name:      'Infra L3 – Tight Budget',
+  type:      'puzzle-typed-flow',
+  svgMap:    balkansSvg,
+  budget:    310,
   resources: [R.WATER],
   objectives: [
     'Deliver WATER to all districts',
@@ -99,31 +133,39 @@ export const infraL3 = {
   cities: [
     {
       x: 26, y: 45, cityName: 'North Reservoir',
-      role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.WATER],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.WATER]: 2 },
     },
     {
       x: 50, y: 30, cityName: 'University',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
     {
       x: 62, y: 47, cityName: 'Factory Row',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
   ],
 };
 
+// ── L4 – Twin Utilities ──────────────────────────────────────────────────────
+
 export const infraL4 = {
-  id: 'infra-l4',
-  name: 'Infra L4 – Twin Utilities',
-  type: 'puzzle-typed-flow',
-  svgMap: balkansSvg,
-  budget: 620,
+  id:        'infra-l4',
+  name:      'Infra L4 – Twin Utilities',
+  type:      'puzzle-typed-flow',
+  svgMap:    balkansSvg,
+  budget:    620,
   resources: [R.WATER, R.ENERGY],
   objectives: [
     'Deliver WATER to Civic Center',
@@ -134,43 +176,55 @@ export const infraL4 = {
   cities: [
     {
       x: 25, y: 55, cityName: 'River Intake',
-      role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.WATER],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.WATER]: 2 },
     },
     {
       x: 31, y: 25, cityName: 'Power Plant',
-      role: ROLES.PRODUCER, produces: [R.ENERGY], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.ENERGY],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.ENERGY]: 2 },
     },
     {
       x: 53, y: 57, cityName: 'Civic Center',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
     {
       x: 58, y: 30, cityName: 'Industrial Park',
-      role: ROLES.CONSUMER, produces: [], needs: [R.ENERGY],
-      demand: { [R.ENERGY]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.ENERGY],
+      demand:        { [R.ENERGY]: 1 },
       supplyPerTick: {},
     },
     {
       x: 69, y: 44, cityName: 'Metro Core',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER, R.ENERGY],
-      demand: { [R.WATER]: 1, [R.ENERGY]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER, R.ENERGY],
+      demand:        { [R.WATER]: 1, [R.ENERGY]: 1 },
       supplyPerTick: {},
     },
   ],
 };
 
+// ── L5 – Efficiency Test ─────────────────────────────────────────────────────
+
 export const infraL5 = {
-  id: 'infra-l5',
-  name: 'Infra L5 – Efficiency Test',
-  type: 'puzzle-typed-flow',
-  svgMap: balkansSvg,
-  budget: 740,
+  id:        'infra-l5',
+  name:      'Infra L5 – Efficiency Test',
+  type:      'puzzle-typed-flow',
+  svgMap:    balkansSvg,
+  budget:    740,
   resources: [R.WATER, R.ENERGY],
   objectives: [
     'Satisfy all WATER and ENERGY demands',
@@ -180,42 +234,57 @@ export const infraL5 = {
   cities: [
     {
       x: 21, y: 58, cityName: 'South Aquifer',
-      role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.WATER],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.WATER]: 3 },
     },
     {
       x: 25, y: 24, cityName: 'North Grid',
-      role: ROLES.PRODUCER, produces: [R.ENERGY], needs: [],
-      demand: {},
+      role: ROLES.PRODUCER,
+      produces:      [R.ENERGY],
+      needs:         [],
+      demand:        {},
       supplyPerTick: { [R.ENERGY]: 3 },
     },
     {
+      // Hybrid: needs energy to run, but also redistributes water
       x: 46, y: 42, cityName: 'Transfer Hub',
-      role: ROLES.HYBRID, produces: [R.WATER], needs: [R.ENERGY],
-      demand: { [R.ENERGY]: 1 },
+      role: ROLES.HYBRID,
+      produces:      [R.WATER],
+      needs:         [R.ENERGY],
+      demand:        { [R.ENERGY]: 1 },
       supplyPerTick: { [R.WATER]: 1 },
     },
     {
       x: 60, y: 24, cityName: 'Tech Campus',
-      role: ROLES.CONSUMER, produces: [], needs: [R.ENERGY],
-      demand: { [R.ENERGY]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.ENERGY],
+      demand:        { [R.ENERGY]: 1 },
       supplyPerTick: {},
     },
     {
       x: 63, y: 56, cityName: 'Harbor District',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER],
+      demand:        { [R.WATER]: 1 },
       supplyPerTick: {},
     },
     {
       x: 74, y: 40, cityName: 'Central Arcology',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER, R.ENERGY],
-      demand: { [R.WATER]: 1, [R.ENERGY]: 1 },
+      role: ROLES.CONSUMER,
+      produces:      [],
+      needs:         [R.WATER, R.ENERGY],
+      demand:        { [R.WATER]: 1, [R.ENERGY]: 1 },
       supplyPerTick: {},
     },
   ],
 };
+
+// ── Registry ─────────────────────────────────────────────────────────────────
 
 const infraPuzzleScenarios = {
   'infra-l1': infraL1,

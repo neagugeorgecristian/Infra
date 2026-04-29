@@ -1,0 +1,151 @@
+/* ── Layout ──────────────────────────────────────────── */
+.puzzle-container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ── HUD (top-right panel) ───────────────────────────── */
+.puzzle-hud {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.88);
+  color: white;
+  padding: 14px 18px;
+  border-radius: 10px;
+  min-width: 230px;
+  z-index: 100;
+  font-size: 14px;
+  border: 1px solid #444;
+}
+
+.puzzle-hud__title {
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: center;
+  color: #aad4ff;
+  letter-spacing: 0.03em;
+}
+
+/* Budget bar */
+.puzzle-hud__budget {
+  margin-bottom: 10px;
+}
+
+.puzzle-hud__budget-bar {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+
+.puzzle-hud__budget-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: #22bb44;
+  transition: width 0.35s ease;
+}
+
+.puzzle-hud__budget-fill--warning  { background: #ffaa00; }
+.puzzle-hud__budget-fill--critical { background: #ff3300; }
+
+/* Objectives list */
+.puzzle-hud__objectives {
+  margin-top: 10px;
+}
+
+.puzzle-hud__objective {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.puzzle-hud__objective--met   { color: #66ff88; }
+.puzzle-hud__objective--unmet { color: #aaaaaa; }
+
+/* Stats footer */
+.puzzle-hud__stats {
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: 0.75;
+  border-top: 1px solid #333;
+  padding-top: 8px;
+  line-height: 1.7;
+}
+
+/* Star guide */
+.puzzle-hud__stars-guide {
+  margin-top: 10px;
+  font-size: 11px;
+  opacity: 0.65;
+  border-top: 1px solid #333;
+  padding-top: 8px;
+  line-height: 1.7;
+}
+
+/* ── Game-over overlay ───────────────────────────────── */
+.puzzle-gameover {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #111;
+  color: white;
+  padding: 40px;
+  border-radius: 16px;
+  font-size: 16px;
+  text-align: center;
+  z-index: 1000;
+  min-width: 300px;
+  border: 2px solid #444;
+}
+
+.puzzle-gameover__title {
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.puzzle-gameover__stars {
+  font-size: 38px;
+  margin-bottom: 16px;
+}
+
+.puzzle-gameover__stats {
+  font-size: 15px;
+  margin-bottom: 20px;
+  line-height: 2;
+}
+
+/* ── Inline line-options for puzzle (no upgrade button) ─ */
+.puzzle-line-options {
+  position: fixed;
+  background: #111;
+  border: 1px solid #555;
+  padding: 10px 14px;
+  border-radius: 8px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.puzzle-line-options button {
+  background: #222;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.puzzle-line-options button:hover { background: #333; }
+.puzzle-line-options button.danger { color: #ff7755; border-color: #773322; }
+.puzzle-line-options button.danger:hover { background: #331a10; }
