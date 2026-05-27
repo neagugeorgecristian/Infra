@@ -1,15 +1,37 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import PuzzleSVGMap from './PuzzleSVGMap';
 import PuzzleHUD, { calculateStarCount } from './PuzzleHUD';
 import NavigatorPanel from './NavigatorPanel';
 import { calculateLineCost } from './utils.js';
-import { evaluateTypedFlow } from './PuzzleFlow';
+import { evaluateTypedFlow, computeDegreeMap, isAtMaxDegree } from './PuzzleFlow';
 
 import './puzzle.css';
 
-// ── Small inline line-options menu ───────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Minimum cost of any unbuilt connection — used to detect budget-fail. */
+function getMinRemainingConnectionCost(cities, lines, calcCost) {
+  const existing = new Set(
+    lines
+      .filter(l => !l.isDeleted)
+      .map(l => [l.points[0].cityName, l.points[1].cityName].sort().join('||'))
+  );
+  let min = Infinity;
+  for (let i = 0; i < cities.length; i++) {
+    for (let j = i + 1; j < cities.length; j++) {
+      const key = [cities[i].cityName, cities[j].cityName].sort().join('||');
+      if (!existing.has(key)) {
+        const cost = calcCost(cities[i], cities[j]);
+        if (cost < min) min = cost;
+      }
+    }
+  }
+  return min === Infinity ? 0 : min;
+}
+
+// ── Inline line-options menu ──────────────────────────────────────────────────
 
 function PuzzleLineOptions({ position, line, onDelete, onClose }) {
   if (!line) return null;
@@ -24,29 +46,51 @@ function PuzzleLineOptions({ position, line, onDelete, onClose }) {
   );
 }
 
-// ── Game-over overlay ────────────────────────────────────────────────────────
+// ── Game-over overlay ─────────────────────────────────────────────────────────
 
-function PuzzleGameOver({ stars, spent, initialBudget, connectionCount, flowResult, onReplay, onMenu }) {
-  const starCount  = calculateStarCount(stars, spent, connectionCount);
-  const starStr    = '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount);
+function PuzzleGameOver({ result, stars, spent, initialBudget, connectionCount, flowResult, onReplay, onMenu }) {
+  if (result === 'success') {
+    const starCount = calculateStarCount(stars, spent, connectionCount);
+    const starStr   = '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount);
+    return (
+      <div className="puzzle-gameover">
+        <div className="puzzle-gameover__stars">{starStr}</div>
+        <div className="puzzle-gameover__title">All resources delivered!</div>
+        <div className="puzzle-gameover__stats">
+          <div>💰 Spent: <strong>€{spent}</strong> of €{initialBudget}</div>
+          <div>🔗 Connections used: <strong>{connectionCount}</strong></div>
+          <div>🔌 Needs met: <strong>{flowResult.metNeeds}/{flowResult.totalNeeds}</strong></div>
+          <div>📊 Efficiency: <strong>{flowResult.efficiency}%</strong></div>
+        </div>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <button onClick={onReplay} style={{ padding: '8px 20px', borderRadius: '8px', background: '#1a6b2e', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
+            ↩ Play Again
+          </button>
+          <button onClick={onMenu} style={{ padding: '8px 20px', borderRadius: '8px', background: '#333', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
+            🏠 Menu
+          </button>
+        </div>
+      </div>
+    );
+  }
 
+  // result === 'fail'
   return (
-    <div className="puzzle-gameover">
-      <div className="puzzle-gameover__stars">{starStr}</div>
-      <div className="puzzle-gameover__title">All resources delivered!</div>
+    <div className="puzzle-gameover puzzle-gameover--fail">
+      <div className="puzzle-gameover__stars">💥</div>
+      <div className="puzzle-gameover__title">Infrastructure failed!</div>
+      <div style={{ color: '#ff9977', marginBottom: '16px', fontSize: '14px' }}>
+        {flowResult.unmetNeeds} demand{flowResult.unmetNeeds !== 1 ? 's' : ''} could not be met
+      </div>
       <div className="puzzle-gameover__stats">
-        <div>💰 Spent: <strong>€{spent}</strong> of €{initialBudget}</div>
-        <div>🔗 Connections used: <strong>{connectionCount}</strong></div>
         <div>🔌 Needs met: <strong>{flowResult.metNeeds}/{flowResult.totalNeeds}</strong></div>
         <div>📊 Efficiency: <strong>{flowResult.efficiency}%</strong></div>
       </div>
       <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-        <button onClick={onReplay}
-          style={{ padding: '8px 20px', borderRadius: '8px', background: '#1a6b2e', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
-          ↩ Play Again
+        <button onClick={onReplay} style={{ padding: '8px 20px', borderRadius: '8px', background: '#7a1a1a', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
+          ↩ Try Again
         </button>
-        <button onClick={onMenu}
-          style={{ padding: '8px 20px', borderRadius: '8px', background: '#333', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
+        <button onClick={onMenu} style={{ padding: '8px 20px', borderRadius: '8px', background: '#333', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
           🏠 Menu
         </button>
       </div>
@@ -54,7 +98,7 @@ function PuzzleGameOver({ stars, spent, initialBudget, connectionCount, flowResu
   );
 }
 
-// ── Main component ───────────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────────────────────
 
 function PuzzleMap({ scenario }) {
   const navigate = useNavigate();
@@ -65,90 +109,122 @@ function PuzzleMap({ scenario }) {
     budget: initialBudget = 1000,
     stars,
     resources,
+    connectionLimit = null,   // hard cap on total connections (null = no cap)
   } = scenario;
 
-  // ── State ──────────────────────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────────────────────
   const [money,           setMoney]           = useState(initialBudget);
   const [lines,           setLines]           = useState([]);
   const [selectedMarkers, setSelectedMarkers] = useState([]);
   const [lineMenu,        setLineMenu]        = useState({ visible: false, position: { x: 0, y: 0 }, line: null });
-  const [gameOver,        setGameOver]        = useState(false);
+  const [gameOver,        setGameOver]        = useState(null); // null | 'success' | 'fail'
   const [flowResult,      setFlowResult]      = useState(() =>
     evaluateTypedFlow({ cities: initialCities, lines: [] })
   );
 
-  // Refs so callbacks always see fresh values without re-creating them
   const moneyRef = useRef(money);
   const linesRef = useRef(lines);
   useEffect(() => { moneyRef.current = money; }, [money]);
   useEffect(() => { linesRef.current = lines; }, [lines]);
 
-  // ── Re-evaluate flow whenever lines change ─────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const activeLines     = useMemo(() => lines.filter(l => !l.isDeleted), [lines]);
+  const connectionCount = activeLines.length;
+  const spent           = initialBudget - money;
+
+  // Live degree map: cityName → current connection count
+  const degreeMap = useMemo(() => computeDegreeMap(lines), [lines]);
+
+  // ── Flow evaluation + win/fail check ─────────────────────────────────────
   useEffect(() => {
     const result = evaluateTypedFlow({ cities: initialCities, lines });
     setFlowResult(result);
+
     if (result.allDemandsMet && !gameOver) {
-      setGameOver(true);
+      setGameOver('success');
+      return;
     }
-  }, [lines, initialCities, gameOver]);
 
-  // ── Derived values ─────────────────────────────────────────────────────────
-  const spent           = initialBudget - money;
-  const activeLines     = lines.filter(l => !l.isDeleted);
-  const connectionCount = activeLines.length;
+    if (!result.allDemandsMet && !gameOver) {
+      // Fail: connection limit reached
+      if (connectionLimit != null && activeLines.length >= connectionLimit) {
+        setGameOver('fail');
+        return;
+      }
+      // Fail: budget exhausted and no affordable connection remains
+      const minCost = getMinRemainingConnectionCost(initialCities, lines, calculateLineCost);
+      if (minCost > 0 && moneyRef.current < minCost) {
+        setGameOver('fail');
+      }
+    }
+  }, [lines, initialCities, gameOver, connectionLimit, activeLines.length]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
-  /** Called when the user clicks a city marker */
   const handleMarkerClick = useCallback((city) => {
     if (gameOver) return;
 
     setSelectedMarkers(prev => {
-      // No city selected yet → select this one
       if (prev.length === 0) return [city];
 
       const first = prev[0];
-
-      // Clicked same city → deselect
       if (first.cityName === city.cityName) return [];
 
-      // Attempt to create a connection between first and city
-      const existingLine = linesRef.current.find(l =>
+      const currentLines = linesRef.current;
+      const currentMoney = moneyRef.current;
+
+      // Already connected?
+      const exists = currentLines.find(l =>
         !l.isDeleted && (
           (l.points[0].cityName === first.cityName && l.points[1].cityName === city.cityName) ||
           (l.points[0].cityName === city.cityName  && l.points[1].cityName === first.cityName)
         )
       );
-
-      if (existingLine) {
+      if (exists) {
         alert(`${first.cityName} and ${city.cityName} are already connected.`);
         return [];
       }
 
-      const cost = calculateLineCost(first, city);
-      if (moneyRef.current < cost) {
-        alert(`Not enough budget. Need €${cost}, have €${moneyRef.current}.`);
+      // Connection limit?
+      const activeCnt = currentLines.filter(l => !l.isDeleted).length;
+      if (connectionLimit != null && activeCnt >= connectionLimit) {
+        alert(`Connection limit reached (${connectionLimit} max). Delete a line to reroute.`);
         return [];
       }
 
-      // Commit the connection
+      // Degree limit checks
+      const currentDegree = computeDegreeMap(currentLines);
+      const firstDef  = initialCities.find(c => c.cityName === first.cityName);
+      const targetDef = initialCities.find(c => c.cityName === city.cityName);
+
+      if (firstDef?.maxDegree != null && isAtMaxDegree(first.cityName, firstDef.maxDegree, currentDegree)) {
+        alert(`${first.cityName} is at its connection limit (${firstDef.maxDegree} max).`);
+        return [];
+      }
+      if (targetDef?.maxDegree != null && isAtMaxDegree(city.cityName, targetDef.maxDegree, currentDegree)) {
+        alert(`${city.cityName} is at its connection limit (${targetDef.maxDegree} max).`);
+        return [];
+      }
+
+      // Budget check
+      const cost = calculateLineCost(first, city);
+      if (currentMoney < cost) {
+        alert(`Not enough budget. Need €${cost}, have €${currentMoney}.`);
+        return [];
+      }
+
+      // Commit
       setMoney(m => m - cost);
-      const newLine = {
-        id: Date.now(),
-        points: [first, city],
-        className: 'singleline',
-        isNew: true,
-      };
+      const newLine = { id: Date.now(), points: [first, city], className: 'singleline', isNew: true };
       setLines(prev2 => [...prev2, newLine]);
       setTimeout(() => {
         setLines(prev2 => prev2.map(l => l.id === newLine.id ? { ...l, isNew: false } : l));
       }, 1100);
 
-      return [];  // deselect after connecting
+      return [];
     });
-  }, [gameOver]);
+  }, [gameOver, initialCities, connectionLimit]);
 
-  /** Clicking a drawn line opens the small options menu */
   const handleLineClick = useCallback((e, line) => {
     e.stopPropagation();
     setLineMenu({ visible: true, position: { x: e.clientX + 10, y: e.clientY + 10 }, line });
@@ -158,20 +234,17 @@ function PuzzleMap({ scenario }) {
     const target = lineMenu.line;
     if (!target) return;
     setLines(prev => prev.map(l => l.id === target.id ? { ...l, isDeleted: true } : l));
-    // Refund half the cost when a line is deleted
-    const refund = Math.round(calculateLineCost(target.points[0], target.points[1]) * 0.5);
+    // 40% refund on deletion (down from 50%) — makes impulsive deletions costly
+    const refund = Math.round(calculateLineCost(target.points[0], target.points[1]) * 0.4);
     setMoney(m => m + refund);
     setLineMenu({ visible: false, position: { x: 0, y: 0 }, line: null });
   }, [lineMenu]);
 
-  /** Click on blank map area → close menus and deselect */
-  const handleMapClick = useCallback((e) => {
-    if (lineMenu.visible) {
-      setLineMenu({ visible: false, position: { x: 0, y: 0 }, line: null });
-    }
+  const handleMapClick = useCallback(() => {
+    if (lineMenu.visible) setLineMenu({ visible: false, position: { x: 0, y: 0 }, line: null });
   }, [lineMenu]);
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="puzzle-container" onClick={handleMapClick}>
       <NavigatorPanel onBack={() => navigate('/')} />
@@ -183,6 +256,7 @@ function PuzzleMap({ scenario }) {
         flowResult={flowResult}
         stars={stars}
         connectionCount={connectionCount}
+        connectionLimit={connectionLimit}
         resources={resources}
       />
 
@@ -195,7 +269,8 @@ function PuzzleMap({ scenario }) {
         onLineClick={handleLineClick}
         flowResult={flowResult}
         calculateLineCost={calculateLineCost}
-        gameOver={gameOver}
+        degreeMap={degreeMap}
+        gameOver={!!gameOver}
       />
 
       {lineMenu.visible && lineMenu.line && (
@@ -209,6 +284,7 @@ function PuzzleMap({ scenario }) {
 
       {gameOver && (
         <PuzzleGameOver
+          result={gameOver}
           stars={stars}
           spent={spent}
           initialBudget={initialBudget}

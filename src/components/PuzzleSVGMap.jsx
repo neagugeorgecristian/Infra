@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { ReactSVG } from 'react-svg';
 import { buildPathD, buildAnimationKeys } from './pathRegistry.jsx';
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const RESOURCE_COLOR = {
   water:  '#4ab0ff',
@@ -14,19 +14,100 @@ const RESOURCE_ICON = {
   energy: '⚡',
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Shape helpers ─────────────────────────────────────────────────────────────
 
 /**
- * Given the active lines, determine which resource types flow along each line.
- * Strategy: BFS from each producer; any line traversed while reaching a
- * consumer carries that producer's resource.  Simple and sufficient for the
- * current puzzle sizes.
+ * Returns SVG polygon `points` string for a regular n-sided polygon.
+ * cx/cy are in viewBox coordinates.  r is the circumradius.
+ * rotOffset shifts the first vertex (radians); default puts a flat edge on top.
  */
+function polygonPoints(cx, cy, r, sides, rotOffset = 0) {
+  return Array.from({ length: sides }, (_, i) => {
+    const angle = (2 * Math.PI * i / sides) - Math.PI / 2 + rotOffset;
+    return `${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`;
+  }).join(' ');
+}
+
+/** Total units a city produces (sum over all resource types). */
+function getTotalSupply(city) {
+  return Object.values(city.supplyPerTick ?? {}).reduce((a, b) => a + b, 0);
+}
+
+/**
+ * Maps a supply count → number of polygon sides.
+ * 0-2 → circle (return 0 as sentinel), 3 → triangle, 4 → square, etc.
+ */
+function supplySides(supply) {
+  if (supply <= 2) return 0;  // 0 = circle
+  return Math.min(supply, 8); // cap at octagon
+}
+
+/**
+ * Renders the main body of a city as the appropriate shape.
+ *
+ * Producer / active-hybrid  → shape based on supplyPerTick (circle=2, tri=3…)
+ * Inactive hybrid            → octagon with dashed stroke (waiting state)
+ * Consumer                   → diamond (rotated square, 4 sides + 45° offset)
+ */
+function CityShape({ city, cx, cy, r, fillColor, strokeColor, strokeWidth, isHybrid, isActivated }) {
+  const isProducer = city.role === 'producer';
+  const isConsumer = city.role === 'consumer';
+
+  // ── Consumer: diamond ────────────────────────────────────────────────────
+  if (isConsumer) {
+    return (
+      <polygon
+        points={polygonPoints(cx, cy, r * 1.15, 4, Math.PI / 4)}
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+      />
+    );
+  }
+
+  // ── Inactive hybrid: dashed octagon ─────────────────────────────────────
+  if (isHybrid && !isActivated) {
+    return (
+      <polygon
+        points={polygonPoints(cx, cy, r, 8)}
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        strokeDasharray="3 2"
+      />
+    );
+  }
+
+  // ── Producer / active hybrid: supply-based shape ─────────────────────────
+  const supply = getTotalSupply(city);
+  const sides  = supplySides(supply);
+
+  if (sides === 0) {
+    // Circle (supply ≤ 2)
+    return (
+      <circle
+        cx={cx} cy={cy} r={r}
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+      />
+    );
+  }
+
+  return (
+    <polygon
+      points={polygonPoints(cx, cy, r, sides)}
+      fill={fillColor}
+      stroke={strokeColor}
+      strokeWidth={strokeWidth}
+    />
+  );
+}
+
+// ── Line resource computation (BFS from each producer) ────────────────────────
+
 function computeLineResources(cities, lines) {
   const activeLines = lines.filter(l => !l.isDeleted);
-  const cityByName = Object.fromEntries(cities.map(c => [c.cityName, c]));
-
-  // adjacency: cityName → Set of cityNames, keyed by line id
   const adj = new Map();
   activeLines.forEach(l => {
     const a = l.points[0].cityName;
@@ -37,15 +118,12 @@ function computeLineResources(cities, lines) {
     adj.get(b).push({ neighbor: a, lineId: l.id });
   });
 
-  // resource carried per line id
-  const lineResources = {};  // lineId → Set<resource>
-
+  const lineResources = {};
   cities.forEach(city => {
     if (!city.produces?.length) return;
     city.produces.forEach(resource => {
-      // BFS
       const visited = new Set([city.cityName]);
-      const queue = [city.cityName];
+      const queue   = [city.cityName];
       while (queue.length) {
         const cur = queue.shift();
         (adj.get(cur) || []).forEach(({ neighbor, lineId }) => {
@@ -59,11 +137,10 @@ function computeLineResources(cities, lines) {
       }
     });
   });
-
   return lineResources;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Component ──────────────────────────────────────────────────────────────────
 
 function PuzzleSVGMap({
   lines,
@@ -74,6 +151,7 @@ function PuzzleSVGMap({
   onLineClick,
   flowResult,
   calculateLineCost,
+  degreeMap,
   gameOver,
 }) {
   const containerRef  = useRef(null);
@@ -87,29 +165,34 @@ function PuzzleSVGMap({
   const MAX_W = 1200;
   const MAX_H = 1000;
 
-  // ── viewBox from injected SVG ──────────────────────────────────────────────
+  // Derive viewBox dimensions for coordinate maths
+  const [, , vbW, vbH] = viewBox.split(' ').map(Number);
+
   const handleAfterInjection = (svg) => {
     const vb = svg?.getAttribute('viewBox');
     if (vb) setViewBox(vb);
   };
 
-  // ── Container sizing (preserve aspect ratio) ──────────────────────────────
-  const [, , vbW, vbH] = viewBox.split(' ').map(Number);
-  const aspect    = vbW / vbH;
-  const cW        = aspect > MAX_W / MAX_H ? MAX_W : MAX_H * aspect;
-  const cH        = aspect > MAX_W / MAX_H ? MAX_W / aspect : MAX_H;
-
+  // Container sizing (preserve aspect ratio)
+  const aspect = vbW / vbH;
+  const cW     = aspect > MAX_W / MAX_H ? MAX_W : MAX_H * aspect;
+  const cH     = aspect > MAX_W / MAX_H ? MAX_W / aspect : MAX_H;
   useEffect(() => setSvgSize({ width: cW, height: cH }), [cW, cH]);
 
+  // pct → viewBox-space px
+  const pct2vb = (xPct, yPct) => ({
+    x: (xPct / 100) * vbW,
+    y: (yPct / 100) * vbH,
+  });
+
+  // pct → rendered-container px (for tooltip rects)
   const pct2px = (xPct, yPct) => ({
     x: (xPct / 100) * svgSize.width,
     y: (yPct / 100) * svgSize.height,
   });
 
-  // ── Ghost line (first city selected → mouse) ──────────────────────────────
-  useEffect(() => {
-    if (selectedMarkers.length === 0) setMousePos(null);
-  }, [selectedMarkers]);
+  // Ghost line tracking
+  useEffect(() => { if (selectedMarkers.length === 0) setMousePos(null); }, [selectedMarkers]);
 
   const handleMouseMove = (e) => {
     if (selectedMarkers.length !== 1) return;
@@ -117,25 +200,25 @@ function PuzzleSVGMap({
     if (!svg) return;
     try {
       const pt  = svg.createSVGPoint();
-      pt.x = e.clientX;
-      pt.y = e.clientY;
+      pt.x = e.clientX; pt.y = e.clientY;
       const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
       setMousePos({ x: sp.x, y: sp.y });
-    } catch (_) { /* SVG not yet mounted */ }
+    } catch (_) {}
   };
 
   const ghostStart = selectedMarkers.length === 1 && mousePos
-    ? { x: (selectedMarkers[0].x / 100) * vbW, y: (selectedMarkers[0].y / 100) * vbH }
+    ? pct2vb(selectedMarkers[0].x, selectedMarkers[0].y)
     : null;
 
-  // ── Derived data from flow result ─────────────────────────────────────────
-  const servedSet = new Set(
+  // Derived flow data
+  const servedSet       = new Set(
     (flowResult?.consumerStatus || []).filter(s => s.allMet).map(s => s.cityName)
   );
+  const activatedHybrids = flowResult?.activatedHybrids ?? new Set();
+  const lineResourceMap  = computeLineResources(cities, lines);
 
-  const lineResourceMap = computeLineResources(cities, lines);
+  const SHAPE_RADIUS = 9;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div
       ref={containerRef}
@@ -143,46 +226,35 @@ function PuzzleSVGMap({
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setMousePos(null)}
     >
-      {/* Background country SVG */}
-      <ReactSVG
-        src={svgFile}
-        afterInjection={handleAfterInjection}
-      />
+      {/* Background SVG */}
+      <ReactSVG src={svgFile} afterInjection={handleAfterInjection} />
 
-      {/* Overlay: lines + cities */}
+      {/* Overlay */}
       <svg
         ref={overlayRef}
-        style={{
-          position: 'absolute', top: 0, left: 0,
-          width: '100%', height: '100%',
-          pointerEvents: 'none',
-        }}
+        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         viewBox={viewBox}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* ── Connection lines ─────────────────────────────── */}
+        {/* ── Connection lines ──────────────────────────────────────── */}
         {lines.map((line, idx) => {
           if (line.isDeleted) return null;
 
           const from   = line.points[0];
           const to     = line.points[1];
-          const fromPx = pct2px(from.x, from.y);
-          const toPx   = pct2px(to.x,   to.y);
+          const fromPx = pct2vb(from.x, from.y);
+          const toPx   = pct2vb(to.x, to.y);
           const wpts   = [fromPx, toPx];
           const pathD  = buildPathD(wpts);
           const lineId = line.id ?? idx;
           const pathId = `pp-${lineId}`;
-
           const pathLen = Math.hypot(toPx.x - fromPx.x, toPx.y - fromPx.y);
 
-          const resources = lineResourceMap[lineId];
-          // If multiple resources flow on this line, use the first; else neutral
+          const resources    = lineResourceMap[lineId];
           const resourceList = resources ? [...resources] : [];
-          const lineColor = resourceList.length === 1
+          const lineColor    = resourceList.length === 1
             ? RESOURCE_COLOR[resourceList[0]] ?? '#aaaaaa'
-            : resourceList.length > 1
-              ? '#cccccc'   // mixed
-              : '#666666';  // not carrying anything
+            : resourceList.length > 1 ? '#cccccc' : '#666666';
 
           const { keyTimes, keyPoints, keySplines, totalDuration } =
             buildAnimationKeys(wpts, [1]);
@@ -191,7 +263,6 @@ function PuzzleSVGMap({
             <React.Fragment key={lineId}>
               <path id={pathId} d={pathD} fill="none" stroke="none" />
 
-              {/* Clickable line */}
               <path
                 d={pathD}
                 fill="none"
@@ -204,15 +275,10 @@ function PuzzleSVGMap({
                 onClick={e => onLineClick(e, line)}
               >
                 {line.isNew && (
-                  <animate
-                    attributeName="stroke-dashoffset"
-                    from={pathLen} to={0}
-                    dur="0.9s" fill="freeze"
-                  />
+                  <animate attributeName="stroke-dashoffset" from={pathLen} to={0} dur="0.9s" fill="freeze" />
                 )}
               </path>
 
-              {/* Animated resource dot */}
               {!gameOver && !line.isNew && resourceList.length > 0 && (
                 <circle r="4" fill={lineColor} stroke="white" strokeWidth="0.8">
                   <animateMotion
@@ -231,7 +297,7 @@ function PuzzleSVGMap({
           );
         })}
 
-        {/* ── Ghost dotted line ────────────────────────────── */}
+        {/* ── Ghost dotted line ─────────────────────────────────────── */}
         {ghostStart && mousePos && (
           <line
             x1={ghostStart.x} y1={ghostStart.y}
@@ -244,28 +310,55 @@ function PuzzleSVGMap({
           />
         )}
 
-        {/* ── City markers ─────────────────────────────────── */}
+        {/* ── City markers ──────────────────────────────────────────── */}
         {cities.map((city, i) => {
-          const isSelected = selectedMarkers.some(m => m.cityName === city.cityName);
-          const isProducer = city.role === 'producer';
-          const isHybrid   = city.role === 'hybrid';
-          const isConsumer = city.role === 'consumer';
-          const isServed   = servedSet.has(city.cityName);
+          const isSelected  = selectedMarkers.some(m => m.cityName === city.cityName);
+          const isProducer  = city.role === 'producer';
+          const isHybrid    = city.role === 'hybrid';
+          const isConsumer  = city.role === 'consumer';
+          const isActivated = activatedHybrids.has(city.cityName);
+          const isServed    = servedSet.has(city.cityName);
 
           const primaryResource = (city.produces ?? [])[0] ?? (city.needs ?? [])[0];
           const resourceColor   = RESOURCE_COLOR[primaryResource] ?? '#aaaaaa';
 
-          // Fill: producers use resource color; consumers: green if served, red if not
-          const fillColor = (isProducer || isHybrid)
-            ? resourceColor
-            : isServed ? '#44cc88' : '#ff6633';
+          // ── Colours ────────────────────────────────────────────────
+          const fillColor = isConsumer
+            ? (isServed ? '#44cc88' : '#ff6633')
+            : isHybrid && !isActivated
+              ? '#888888'                  // greyed-out until powered
+              : resourceColor;
 
-          const strokeColor = isSelected     ? 'white'
-            : (isProducer || isHybrid)       ? '#1a4480'
-            : isServed                       ? '#115522'
-            :                                  '#882200';
+          const strokeColor = isSelected
+            ? 'white'
+            : isConsumer
+              ? (isServed ? '#115522' : '#882200')
+              : isHybrid && !isActivated
+                ? '#555555'
+                : '#1a4480';
 
-          // Price preview on hover when a city is already selected
+          // ── ViewBox-space coordinates ──────────────────────────────
+          const { x: cvbX, y: cvbY } = pct2vb(city.x, city.y);
+          // Container-pixel coordinates for tooltip rect
+          const { x: cxPx, y: cyPx } = pct2px(city.x, city.y);
+
+          // ── Supply label & role label ──────────────────────────────
+          const totalSupply = getTotalSupply(city);
+          const supplyLabel = (isProducer || (isHybrid && isActivated)) && totalSupply > 0
+            ? `×${totalSupply}`
+            : null;
+
+          const roleLabel = isProducer
+            ? `▲ ${(city.produces ?? []).map(r => RESOURCE_ICON[r] ?? r).join(' ')}`
+            : isHybrid
+              ? `↕ ${([...(city.produces ?? []), ...(city.needs ?? [])]).map(r => RESOURCE_ICON[r] ?? r).join(' ')}`
+              : `▼ ${(city.needs ?? []).map(r => RESOURCE_ICON[r] ?? r).join(' ')}`;
+
+          // ── Degree / cost preview ──────────────────────────────────
+          const cityDef   = city;
+          const curDegree = degreeMap?.get(city.cityName) ?? 0;
+          const atDegCap  = cityDef?.maxDegree != null && curDegree >= cityDef.maxDegree;
+
           const showPrice = selectedMarkers.length === 1
             && hoveredCity === city.cityName
             && !isSelected
@@ -275,59 +368,78 @@ function PuzzleSVGMap({
             ? calculateLineCost(selectedMarkers[0], city)
             : null;
 
-          const { x: cxPx, y: cyPx } = pct2px(city.x, city.y);
-
-          // Label for what this city produces / needs
-          const roleLabel = isProducer
-            ? `▲ ${(city.produces ?? []).map(r => RESOURCE_ICON[r] ?? r).join(' ')}`
-            : isHybrid
-              ? `↕ ${([...(city.produces ?? []), ...(city.needs ?? [])]).map(r => RESOURCE_ICON[r] ?? r).join(' ')}`
-              : `▼ ${(city.needs ?? []).map(r => RESOURCE_ICON[r] ?? r).join(' ')}`;
-
           return (
             <g
               key={i}
-              style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+              style={{ cursor: atDegCap ? 'not-allowed' : 'pointer', pointerEvents: 'auto', opacity: atDegCap ? 0.55 : 1 }}
               onClick={() => onMarkerClick(city)}
               onMouseEnter={() => setHoveredCity(city.cityName)}
               onMouseLeave={() => setHoveredCity(null)}
             >
-              {/* Pulse ring for producers */}
+              {/* Pulse ring — producers only */}
               {isProducer && (
-                <circle cx={`${city.x}%`} cy={`${city.y}%`} r="12"
+                <circle cx={cvbX} cy={cvbY} r="12"
                   fill="none" stroke={resourceColor} strokeWidth="1.5" opacity="0.35"
                 >
-                  <animate attributeName="r"       values="10;22;10" dur="2.4s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.4;0;0.4"  dur="2.4s" repeatCount="indefinite" />
+                  <animate attributeName="r"       values="10;22;10"  dur="2.4s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.4;0;0.4" dur="2.4s" repeatCount="indefinite" />
                 </circle>
               )}
 
-              {/* Green ring when consumer is served */}
+              {/* Activation glow — hybrid just became active */}
+              {isHybrid && isActivated && (
+                <circle cx={cvbX} cy={cvbY} r="14"
+                  fill="none" stroke={resourceColor} strokeWidth="1.5" opacity="0.4"
+                >
+                  <animate attributeName="r"       values="12;20;12"   dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.45;0;0.45" dur="2s" repeatCount="indefinite" />
+                </circle>
+              )}
+
+              {/* Served ring — consumers */}
               {isConsumer && isServed && (
-                <circle cx={`${city.x}%`} cy={`${city.y}%`} r="13"
+                <circle cx={cvbX} cy={cvbY} r="15"
                   fill="none" stroke="#44cc88" strokeWidth="1.5" opacity="0.55"
                 />
               )}
 
               {/* Selection dashed ring */}
               {isSelected && (
-                <circle cx={`${city.x}%`} cy={`${city.y}%`} r="14"
+                <circle cx={cvbX} cy={cvbY} r="16"
                   fill="none" stroke="white" strokeWidth="2"
                   strokeDasharray="4 3" opacity="0.85"
                 />
               )}
 
-              {/* Main body */}
-              <circle
-                cx={`${city.x}%`} cy={`${city.y}%`} r="9"
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth="2"
+              {/* ── Main city shape ─────────────────────────────────── */}
+              <CityShape
+                city={city}
+                cx={cvbX}
+                cy={cvbY}
+                r={SHAPE_RADIUS}
+                fillColor={fillColor}
+                strokeColor={strokeColor}
+                strokeWidth={2}
+                isHybrid={isHybrid}
+                isActivated={isActivated}
               />
+
+              {/* Supply count badge (top-right of shape) */}
+              {supplyLabel && (
+                <text
+                  x={cvbX + 11} y={cvbY - 8}
+                  textAnchor="middle"
+                  fontSize="9" fontWeight="bold"
+                  fill={resourceColor}
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}
+                >
+                  {supplyLabel}
+                </text>
+              )}
 
               {/* City name */}
               <text
-                x={`${city.x}%`} y={`${city.y - 1.8}%`}
+                x={cvbX} y={cvbY - 13}
                 textAnchor="middle"
                 fontSize="12" fontWeight="bold" fill="white"
                 style={{ userSelect: 'none', pointerEvents: 'none' }}
@@ -337,26 +449,43 @@ function PuzzleSVGMap({
 
               {/* Role / resource label */}
               <text
-                x={`${city.x}%`} y={`${city.y + 2.3}%`}
+                x={cvbX} y={cvbY + 22}
                 textAnchor="middle"
                 fontSize="9"
-                fill={(isProducer || isHybrid) ? resourceColor : isServed ? '#aaffcc' : '#ffbbaa'}
+                fill={
+                  (isProducer || (isHybrid && isActivated))
+                    ? resourceColor
+                    : isServed ? '#aaffcc' : '#ffbbaa'
+                }
                 style={{ userSelect: 'none', pointerEvents: 'none' }}
               >
                 {roleLabel}
               </text>
 
+              {/* Degree indicator: current / max connections */}
+              {city.maxDegree != null && (
+                <text
+                  x={cvbX - 11} y={cvbY - 8}
+                  textAnchor="middle"
+                  fontSize="8"
+                  fill={atDegCap ? '#ff6655' : '#aaaaaa'}
+                  style={{ userSelect: 'none', pointerEvents: 'none' }}
+                >
+                  {curDegree}/{city.maxDegree}
+                </text>
+              )}
+
               {/* €-cost tooltip on hover */}
               {showPrice && previewCost != null && (
                 <g style={{ pointerEvents: 'none' }}>
                   <rect
-                    x={cxPx - 30} y={cyPx - 40}
+                    x={cxPx - 30} y={cyPx - 44}
                     width="60" height="22" rx="6"
                     fill="#111" fillOpacity="0.9"
                     stroke="#ffdd44" strokeWidth="1.2"
                   />
                   <text
-                    x={cxPx} y={cyPx - 24}
+                    x={cxPx} y={cyPx - 28}
                     textAnchor="middle"
                     fontSize="12" fontWeight="bold" fill="#ffdd44"
                     style={{ userSelect: 'none' }}
