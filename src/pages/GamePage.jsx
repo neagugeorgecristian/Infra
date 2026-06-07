@@ -34,12 +34,13 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
   // puzzle-typed-flow scenarios get their own self-contained controller.
   // Every other type continues to use the classic Map component unchanged.
   if (scenario.type === 'puzzle-typed-flow') {
-    return <PuzzleMap scenario={scenario} />;
+    return <PuzzleMap key={id} scenario={scenario} />;
   }
 
   // Classic path — props signature unchanged
   return (
     <Map
+      key={id}
       scenario={scenario}
       svgMap={scenario.svgMap}
       cities={scenario.cities}

@@ -1,4 +1,6 @@
 import balkansSvg from '../assets/balkans.svg';
+import italySvg from '../assets/it.svg';
+import mdSvg from '../assets/md.svg';
 
 /**
  * Typed-flow puzzle scenarios — Levels 1-11.
@@ -40,18 +42,18 @@ const starTemplate = ({ budget2, budget3, maxConnections3 }) => ({
 // ─────────────────────────────────────────────────────────────
 export const infraL1 = {
   id: 'infra-l1', name: 'Infra L1 – First Pipe',
-  type: 'puzzle-typed-flow', svgMap: balkansSvg,
+  type: 'puzzle-typed-flow', svgMap: mdSvg,
   budget: 260, resources: [R.WATER],
   objectives: ['Deliver WATER to Old Town', 'Use just 1 connection'],
   stars: starTemplate({ budget2: 240, budget3: 220, maxConnections3: 1 }),
   cities: [
     {
-      x: 34, y: 30, cityName: 'Blue Spring',
+      x: 58, y: 49, cityName: 'Chișinău',
       role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
       demand: {}, supplyPerTick: { [R.WATER]: 1 },
     },
     {
-      x: 50, y: 43, cityName: 'Old Town',
+      x: 44, y: 27, cityName: 'Bălți',
       role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: {},
     },
@@ -315,56 +317,56 @@ export const infraL7 = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// L8 – The Capital  ★★★ Medium-Hard
+// L8 – Italy  ★★★ Medium-Hard
 // 7 cities. Central Hub converts water → energy, creating a
 // second energy source. Players who discover this save connections.
 // Budget is tight: brute-force routing won't reach 3 stars.
 // ─────────────────────────────────────────────────────────────
 export const infraL8 = {
-  id: 'infra-l8', name: 'Infra L8 – The Capital',
-  type: 'puzzle-typed-flow', svgMap: balkansSvg,
-  budget: 1200, resources: [R.WATER, R.ENERGY],
+  id: 'infra-l8', name: 'Infra L8 – Italy',
+  type: 'puzzle-typed-flow', svgMap: italySvg,
+  budget: 600, resources: [R.WATER, R.ENERGY],
   objectives: [
     'Supply both utilities to Capital City',
     'Keep all smaller towns operational',
     'Discover the Central Hub shortcut',
   ],
-  stars: starTemplate({ budget2: 1130, budget3: 1060, maxConnections3: 6 }),
+  stars: starTemplate({ budget2: 520, budget3: 450, maxConnections3: 5 }),
   cities: [
     {
-      x: 24, y: 46, cityName: 'Aquifer',
+      x: 33, y: 34, cityName: 'Genoa',
       role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
       demand: {}, supplyPerTick: { [R.WATER]: 3 },
     },
     {
-      x: 28, y: 18, cityName: 'Solar Grid',
+      x: 33, y: 22, cityName: 'Milano',
       role: ROLES.PRODUCER, produces: [R.ENERGY], needs: [],
       demand: {}, supplyPerTick: { [R.ENERGY]: 2 },
     },
     {
-      // Converts water to energy — if connected to Aquifer,
+      // Converts water to energy — if connected to Genoa,
       // it becomes a second energy source for the east side
-      x: 44, y: 36, cityName: 'Central Hub',
+      x: 44, y: 41, cityName: 'Firenze',
       role: ROLES.HYBRID, produces: [R.ENERGY], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: { [R.ENERGY]: 1 },
     },
     {
-      x: 48, y: 22, cityName: 'Small Town A',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
-      demand: { [R.WATER]: 1 }, supplyPerTick: {},
-    },
-    {
-      x: 50, y: 50, cityName: 'Small Town B',
+      x: 49, y: 23, cityName: 'Venezia',
       role: ROLES.CONSUMER, produces: [], needs: [R.ENERGY],
       demand: { [R.ENERGY]: 1 }, supplyPerTick: {},
     },
     {
-      x: 58, y: 36, cityName: 'Capital City',
+      x: 71, y: 67, cityName: 'Bari',
+      role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
+      demand: {}, supplyPerTick: { [R.WATER]: 2 },
+    },
+    {
+      x: 49, y: 58, cityName: 'Roma',
       role: ROLES.CONSUMER, produces: [], needs: [R.WATER, R.ENERGY],
       demand: { [R.WATER]: 1, [R.ENERGY]: 1 }, supplyPerTick: {},
     },
     {
-      x: 56, y: 52, cityName: 'Coast Town',
+      x: 78, y: 77, cityName: 'Otranto',
       role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: {},
     },
@@ -512,7 +514,7 @@ export const infraL10 = {
 // Only the most efficient routing achieves 3 stars.
 // ─────────────────────────────────────────────────────────────
 export const infraL11 = {
-  id: 'infra-l11', name: 'Infra L11 – Grand Infrastructure',
+  id: 'infra-l11', name: 'Infra L11 – Heh',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 2000, resources: [R.WATER, R.ENERGY],
   objectives: [
@@ -608,5 +610,11 @@ const infraPuzzleScenarios = {
   'infra-l10': infraL10,
   'infra-l11': infraL11,
 };
+
+export const PUZZLE_LEVEL_ORDER = [
+  'infra-l1',  'infra-l2',  'infra-l3',  'infra-l4',
+  'infra-l5',  'infra-l6',  'infra-l7',  'infra-l8',
+  'infra-l9',  'infra-l10', 'infra-l11',
+];
 
 export default infraPuzzleScenarios;

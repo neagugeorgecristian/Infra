@@ -109,26 +109,35 @@ function CityShape({ city, cx, cy, r, fillColor, strokeColor, strokeWidth, isHyb
 function computeLineResources(cities, lines) {
   const activeLines = lines.filter(l => !l.isDeleted);
   const adj = new Map();
+
   activeLines.forEach(l => {
     const a = l.points[0].cityName;
     const b = l.points[1].cityName;
+
     if (!adj.has(a)) adj.set(a, []);
     if (!adj.has(b)) adj.set(b, []);
+
     adj.get(a).push({ neighbor: b, lineId: l.id });
     adj.get(b).push({ neighbor: a, lineId: l.id });
   });
 
   const lineResources = {};
+
   cities.forEach(city => {
     if (!city.produces?.length) return;
+
     city.produces.forEach(resource => {
       const visited = new Set([city.cityName]);
       const queue   = [city.cityName];
+
       while (queue.length) {
         const cur = queue.shift();
+
         (adj.get(cur) || []).forEach(({ neighbor, lineId }) => {
           if (!lineResources[lineId]) lineResources[lineId] = new Set();
+
           lineResources[lineId].add(resource);
+
           if (!visited.has(neighbor)) {
             visited.add(neighbor);
             queue.push(neighbor);
@@ -137,6 +146,7 @@ function computeLineResources(cities, lines) {
       }
     });
   });
+
   return lineResources;
 }
 
@@ -158,7 +168,6 @@ function PuzzleSVGMap({
   const overlayRef    = useRef(null);
 
   const [viewBox, setViewBox]   = useState('0 0 1200 800');
-  const [svgSize, setSvgSize]   = useState({ width: 1200, height: 800 });
   const [mousePos, setMousePos] = useState(null);
   const [hoveredCity, setHoveredCity] = useState(null);
 
@@ -177,7 +186,6 @@ function PuzzleSVGMap({
   const aspect = vbW / vbH;
   const cW     = aspect > MAX_W / MAX_H ? MAX_W : MAX_H * aspect;
   const cH     = aspect > MAX_W / MAX_H ? MAX_W / aspect : MAX_H;
-  useEffect(() => setSvgSize({ width: cW, height: cH }), [cW, cH]);
 
   // pct → viewBox-space px
   const pct2vb = (xPct, yPct) => ({
@@ -185,25 +193,47 @@ function PuzzleSVGMap({
     y: (yPct / 100) * vbH,
   });
 
-  // pct → rendered-container px (for tooltip rects)
-  const pct2px = (xPct, yPct) => ({
-    x: (xPct / 100) * svgSize.width,
-    y: (yPct / 100) * svgSize.height,
-  });
+  const SHAPE_RADIUS = 9;
+  const HIT_RADIUS = 26;
+
+  const getHoveredCityFromPoint = (point) => {
+    if (selectedMarkers.length !== 1) return null;
+
+    return cities.find(city => {
+      if (selectedMarkers[0].cityName === city.cityName) return false;
+
+      const cityPoint = pct2vb(city.x, city.y);
+      return Math.hypot(point.x - cityPoint.x, point.y - cityPoint.y) <= HIT_RADIUS;
+    })?.cityName ?? null;
+  };
 
   // Ghost line tracking
-  useEffect(() => { if (selectedMarkers.length === 0) setMousePos(null); }, [selectedMarkers]);
+  useEffect(() => {
+    if (selectedMarkers.length === 0) setMousePos(null);
+  }, [selectedMarkers]);
 
   const handleMouseMove = (e) => {
-    if (selectedMarkers.length !== 1) return;
+    if (selectedMarkers.length !== 1) {
+      setHoveredCity(null);
+      return;
+    }
+
     const svg = overlayRef.current;
     if (!svg) return;
+
     try {
       const pt  = svg.createSVGPoint();
-      pt.x = e.clientX; pt.y = e.clientY;
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+
       const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
-      setMousePos({ x: sp.x, y: sp.y });
-    } catch (_) {}
+      const point = { x: sp.x, y: sp.y };
+
+      setMousePos(point);
+      setHoveredCity(getHoveredCityFromPoint(point));
+    } catch (_) {
+      // getScreenCTM() can fail on unmounted elements – safely ignore
+    }
   };
 
   const ghostStart = selectedMarkers.length === 1 && mousePos
@@ -211,20 +241,21 @@ function PuzzleSVGMap({
     : null;
 
   // Derived flow data
-  const servedSet       = new Set(
+  const servedSet = new Set(
     (flowResult?.consumerStatus || []).filter(s => s.allMet).map(s => s.cityName)
   );
   const activatedHybrids = flowResult?.activatedHybrids ?? new Set();
   const lineResourceMap  = computeLineResources(cities, lines);
-
-  const SHAPE_RADIUS = 9;
 
   return (
     <div
       ref={containerRef}
       style={{ width: cW, height: cH, position: 'relative' }}
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => setMousePos(null)}
+      onMouseLeave={() => {
+        setMousePos(null);
+        setHoveredCity(null);
+      }}
     >
       {/* Background SVG */}
       <ReactSVG src={svgFile} afterInjection={handleAfterInjection} />
@@ -300,8 +331,10 @@ function PuzzleSVGMap({
         {/* ── Ghost dotted line ─────────────────────────────────────── */}
         {ghostStart && mousePos && (
           <line
-            x1={ghostStart.x} y1={ghostStart.y}
-            x2={mousePos.x}   y2={mousePos.y}
+            x1={ghostStart.x}
+            y1={ghostStart.y}
+            x2={mousePos.x}
+            y2={mousePos.y}
             stroke="rgba(255,255,255,0.6)"
             strokeWidth="2"
             strokeDasharray="8 5"
@@ -326,7 +359,7 @@ function PuzzleSVGMap({
           const fillColor = isConsumer
             ? (isServed ? '#44cc88' : '#ff6633')
             : isHybrid && !isActivated
-              ? '#888888'                  // greyed-out until powered
+              ? '#888888'
               : resourceColor;
 
           const strokeColor = isSelected
@@ -339,8 +372,6 @@ function PuzzleSVGMap({
 
           // ── ViewBox-space coordinates ──────────────────────────────
           const { x: cvbX, y: cvbY } = pct2vb(city.x, city.y);
-          // Container-pixel coordinates for tooltip rect
-          const { x: cxPx, y: cyPx } = pct2px(city.x, city.y);
 
           // ── Supply label & role label ──────────────────────────────
           const totalSupply = getTotalSupply(city);
@@ -368,46 +399,81 @@ function PuzzleSVGMap({
             ? calculateLineCost(selectedMarkers[0], city)
             : null;
 
+          const tooltipX = cvbX;
+          const tooltipY = cvbY - 44;
+
           return (
             <g
               key={i}
               style={{ cursor: atDegCap ? 'not-allowed' : 'pointer', pointerEvents: 'auto', opacity: atDegCap ? 0.55 : 1 }}
               onClick={() => onMarkerClick(city)}
-              onMouseEnter={() => setHoveredCity(city.cityName)}
-              onMouseLeave={() => setHoveredCity(null)}
             >
+              {/* Broad invisible hit target so hover/click works across the whole town area. */}
+              <circle
+                cx={cvbX}
+                cy={cvbY}
+                r={HIT_RADIUS}
+                fill="#fff"
+                opacity="0.001"
+                pointerEvents="auto"
+              />
+
               {/* Pulse ring — producers only */}
               {isProducer && (
-                <circle cx={cvbX} cy={cvbY} r="12"
-                  fill="none" stroke={resourceColor} strokeWidth="1.5" opacity="0.35"
+                <circle
+                  cx={cvbX}
+                  cy={cvbY}
+                  r="12"
+                  fill="none"
+                  stroke={resourceColor}
+                  strokeWidth="1.5"
+                  opacity="0.35"
                 >
-                  <animate attributeName="r"       values="10;22;10"  dur="2.4s" repeatCount="indefinite" />
+                  <animate attributeName="r" values="10;22;10" dur="2.4s" repeatCount="indefinite" />
                   <animate attributeName="opacity" values="0.4;0;0.4" dur="2.4s" repeatCount="indefinite" />
                 </circle>
               )}
 
               {/* Activation glow — hybrid just became active */}
               {isHybrid && isActivated && (
-                <circle cx={cvbX} cy={cvbY} r="14"
-                  fill="none" stroke={resourceColor} strokeWidth="1.5" opacity="0.4"
+                <circle
+                  cx={cvbX}
+                  cy={cvbY}
+                  r="14"
+                  fill="none"
+                  stroke={resourceColor}
+                  strokeWidth="1.5"
+                  opacity="0.4"
                 >
-                  <animate attributeName="r"       values="12;20;12"   dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="r" values="12;20;12" dur="2s" repeatCount="indefinite" />
                   <animate attributeName="opacity" values="0.45;0;0.45" dur="2s" repeatCount="indefinite" />
                 </circle>
               )}
 
               {/* Served ring — consumers */}
               {isConsumer && isServed && (
-                <circle cx={cvbX} cy={cvbY} r="15"
-                  fill="none" stroke="#44cc88" strokeWidth="1.5" opacity="0.55"
+                <circle
+                  cx={cvbX}
+                  cy={cvbY}
+                  r="15"
+                  fill="none"
+                  stroke="#44cc88"
+                  strokeWidth="1.5"
+                  opacity="0.55"
                 />
               )}
 
               {/* Selection dashed ring */}
               {isSelected && (
-                <circle cx={cvbX} cy={cvbY} r="16"
-                  fill="none" stroke="white" strokeWidth="2"
-                  strokeDasharray="4 3" opacity="0.85"
+                <circle
+                  cx={cvbX}
+                  cy={cvbY}
+                  r="16"
+                  fill="none"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeDasharray="4 3"
+                  opacity="0.85"
                 />
               )}
 
@@ -427,9 +493,11 @@ function PuzzleSVGMap({
               {/* Supply count badge (top-right of shape) */}
               {supplyLabel && (
                 <text
-                  x={cvbX + 11} y={cvbY - 8}
+                  x={cvbX + 11}
+                  y={cvbY - 8}
                   textAnchor="middle"
-                  fontSize="9" fontWeight="bold"
+                  fontSize="9"
+                  fontWeight="bold"
                   fill={resourceColor}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}
                 >
@@ -439,9 +507,12 @@ function PuzzleSVGMap({
 
               {/* City name */}
               <text
-                x={cvbX} y={cvbY - 13}
+                x={cvbX}
+                y={cvbY - 13}
                 textAnchor="middle"
-                fontSize="12" fontWeight="bold" fill="white"
+                fontSize="12"
+                fontWeight="bold"
+                fill="white"
                 style={{ userSelect: 'none', pointerEvents: 'none' }}
               >
                 {city.cityName}
@@ -449,7 +520,8 @@ function PuzzleSVGMap({
 
               {/* Role / resource label */}
               <text
-                x={cvbX} y={cvbY + 22}
+                x={cvbX}
+                y={cvbY + 22}
                 textAnchor="middle"
                 fontSize="9"
                 fill={
@@ -465,7 +537,8 @@ function PuzzleSVGMap({
               {/* Degree indicator: current / max connections */}
               {city.maxDegree != null && (
                 <text
-                  x={cvbX - 11} y={cvbY - 8}
+                  x={cvbX - 11}
+                  y={cvbY - 8}
                   textAnchor="middle"
                   fontSize="8"
                   fill={atDegCap ? '#ff6655' : '#aaaaaa'}
@@ -479,15 +552,23 @@ function PuzzleSVGMap({
               {showPrice && previewCost != null && (
                 <g style={{ pointerEvents: 'none' }}>
                   <rect
-                    x={cxPx - 30} y={cyPx - 44}
-                    width="60" height="22" rx="6"
-                    fill="#111" fillOpacity="0.9"
-                    stroke="#ffdd44" strokeWidth="1.2"
+                    x={tooltipX - 30}
+                    y={tooltipY}
+                    width="60"
+                    height="22"
+                    rx="6"
+                    fill="#111"
+                    fillOpacity="0.9"
+                    stroke="#ffdd44"
+                    strokeWidth="1.2"
                   />
                   <text
-                    x={cxPx} y={cyPx - 28}
+                    x={tooltipX}
+                    y={tooltipY + 16}
                     textAnchor="middle"
-                    fontSize="12" fontWeight="bold" fill="#ffdd44"
+                    fontSize="12"
+                    fontWeight="bold"
+                    fill="#ffdd44"
                     style={{ userSelect: 'none' }}
                   >
                     €{previewCost}

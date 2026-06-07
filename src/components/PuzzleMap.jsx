@@ -6,6 +6,8 @@ import PuzzleHUD, { calculateStarCount } from './PuzzleHUD';
 import NavigatorPanel from './NavigatorPanel';
 import { calculateLineCost } from './utils.js';
 import { evaluateTypedFlow, computeDegreeMap, isAtMaxDegree } from './PuzzleFlow';
+import { PUZZLE_LEVEL_ORDER } from '../scenarios/infraPuzzleLevels';
+
 
 import './puzzle.css';
 
@@ -48,7 +50,7 @@ function PuzzleLineOptions({ position, line, onDelete, onClose }) {
 
 // ── Game-over overlay ─────────────────────────────────────────────────────────
 
-function PuzzleGameOver({ result, stars, spent, initialBudget, connectionCount, flowResult, onReplay, onMenu }) {
+function PuzzleGameOver({ result, stars, spent, initialBudget, connectionCount, flowResult, onReplay, onMenu, onNextLevel, hasNextLevel }) {
   if (result === 'success') {
     const starCount = calculateStarCount(stars, spent, connectionCount);
     const starStr   = '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount);
@@ -66,6 +68,11 @@ function PuzzleGameOver({ result, stars, spent, initialBudget, connectionCount, 
           <button onClick={onReplay} style={{ padding: '8px 20px', borderRadius: '8px', background: '#1a6b2e', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
             ↩ Play Again
           </button>
+          {hasNextLevel && (
+            <button onClick={onNextLevel} style={{ padding: '8px 20px', borderRadius: '8px', background: '#1a4a8a', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
+              ▶ Next Level
+            </button>
+          )}
           <button onClick={onMenu} style={{ padding: '8px 20px', borderRadius: '8px', background: '#333', color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px' }}>
             🏠 Menu
           </button>
@@ -112,6 +119,10 @@ function PuzzleMap({ scenario }) {
     connectionLimit = null,   // hard cap on total connections (null = no cap)
   } = scenario;
 
+  const currentLevelIndex = PUZZLE_LEVEL_ORDER.indexOf(scenario.id);
+  const nextLevelId = currentLevelIndex !== -1 && currentLevelIndex < PUZZLE_LEVEL_ORDER.length - 1
+    ? PUZZLE_LEVEL_ORDER[currentLevelIndex + 1]
+    : null;
   // ── State ─────────────────────────────────────────────────────────────────
   const [money,           setMoney]           = useState(initialBudget);
   const [lines,           setLines]           = useState([]);
@@ -244,6 +255,10 @@ function PuzzleMap({ scenario }) {
     if (lineMenu.visible) setLineMenu({ visible: false, position: { x: 0, y: 0 }, line: null });
   }, [lineMenu]);
 
+  const handleNextLevel = useCallback(() => {
+    if (nextLevelId) navigate(`/scenario/${nextLevelId}`);
+  }, [nextLevelId, navigate]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="puzzle-container" onClick={handleMapClick}>
@@ -292,6 +307,8 @@ function PuzzleMap({ scenario }) {
           flowResult={flowResult}
           onReplay={() => window.location.reload()}
           onMenu={() => navigate('/')}
+          onNextLevel={handleNextLevel}
+          hasNextLevel={!!nextLevelId}
         />
       )}
     </div>

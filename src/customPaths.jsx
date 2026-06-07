@@ -1,4 +1,4 @@
-// src/customPaths.js
+// src/customPaths.jsx
 
 export const predefinedPaths = {
   "Constanța-Sibiu": {
