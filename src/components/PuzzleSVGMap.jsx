@@ -12,6 +12,7 @@ const RESOURCE_COLOR = {
 const RESOURCE_ICON = {
   water:  '💧',
   energy: '⚡',
+  goods: '📦',
 };
 
 // ── Shape helpers ─────────────────────────────────────────────────────────────

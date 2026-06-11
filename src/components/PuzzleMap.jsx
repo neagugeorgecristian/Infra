@@ -4,10 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import PuzzleSVGMap from './PuzzleSVGMap';
 import PuzzleHUD, { calculateStarCount } from './PuzzleHUD';
 import NavigatorPanel from './NavigatorPanel';
+import PuzzleIntroModal from './PuzzleIntroModal';
 import { calculateLineCost } from './utils.js';
 import { evaluateTypedFlow, computeDegreeMap, isAtMaxDegree } from './PuzzleFlow';
 import { PUZZLE_LEVEL_ORDER } from '../scenarios/infraPuzzleLevels';
-
 
 import './puzzle.css';
 
@@ -123,7 +123,12 @@ function PuzzleMap({ scenario }) {
   const nextLevelId = currentLevelIndex !== -1 && currentLevelIndex < PUZZLE_LEVEL_ORDER.length - 1
     ? PUZZLE_LEVEL_ORDER[currentLevelIndex + 1]
     : null;
+
   // ── State ─────────────────────────────────────────────────────────────────
+
+  // Show intro modal on first mount; dismissed by clicking "I see"
+  const [showIntro,       setShowIntro]       = useState(true);
+
   const [money,           setMoney]           = useState(initialBudget);
   const [lines,           setLines]           = useState([]);
   const [selectedMarkers, setSelectedMarkers] = useState([]);
@@ -148,6 +153,9 @@ function PuzzleMap({ scenario }) {
 
   // ── Flow evaluation + win/fail check ─────────────────────────────────────
   useEffect(() => {
+    // Don't evaluate while the intro is showing — no interaction has happened yet
+    if (showIntro) return;
+
     const result = evaluateTypedFlow({ cities: initialCities, lines });
     setFlowResult(result);
 
@@ -168,9 +176,13 @@ function PuzzleMap({ scenario }) {
         setGameOver('fail');
       }
     }
-  }, [lines, initialCities, gameOver, connectionLimit, activeLines.length]);
+  }, [lines, initialCities, gameOver, connectionLimit, activeLines.length, showIntro]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
+
+  const handleDismissIntro = useCallback(() => {
+    setShowIntro(false);
+  }, []);
 
   const handleMarkerClick = useCallback((city) => {
     if (gameOver) return;
@@ -245,7 +257,7 @@ function PuzzleMap({ scenario }) {
     const target = lineMenu.line;
     if (!target) return;
     setLines(prev => prev.map(l => l.id === target.id ? { ...l, isDeleted: true } : l));
-    // 40% refund on deletion (down from 50%) — makes impulsive deletions costly
+    // 40% refund on deletion
     const refund = Math.round(calculateLineCost(target.points[0], target.points[1]) * 0.4);
     setMoney(m => m + refund);
     setLineMenu({ visible: false, position: { x: 0, y: 0 }, line: null });
@@ -309,6 +321,14 @@ function PuzzleMap({ scenario }) {
           onMenu={() => navigate('/')}
           onNextLevel={handleNextLevel}
           hasNextLevel={!!nextLevelId}
+        />
+      )}
+
+      {/* ── Intro modal — rendered last so it sits on top of everything ── */}
+      {showIntro && (
+        <PuzzleIntroModal
+          scenario={scenario}
+          onDismiss={handleDismissIntro}
         />
       )}
     </div>

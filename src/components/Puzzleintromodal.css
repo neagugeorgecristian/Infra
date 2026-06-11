@@ -1,0 +1,299 @@
+/* ── PuzzleIntroModal — Blueprint/Schematic Aesthetic ───────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap');
+
+.puzzle-intro-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 10, 20, 0.88);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: backdropIn 0.3s ease forwards;
+}
+
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.puzzle-intro-modal {
+  position: relative;
+  width: min(580px, 92vw);
+  background: #080f1e;
+  border: 1px solid #1e3a5f;
+  border-radius: 4px;
+  overflow: hidden;
+  animation: modalIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  box-shadow:
+    0 0 0 1px #0a1628,
+    0 0 40px rgba(74, 176, 255, 0.08),
+    0 24px 80px rgba(0, 0, 0, 0.7);
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Blueprint grid background */
+.puzzle-intro-modal::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(74, 176, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74, 176, 255, 0.03) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Glowing top edge */
+.puzzle-intro-modal::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #4ab0ff, #4ab0ff80, transparent);
+  z-index: 1;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.puzzle-intro-header {
+  position: relative;
+  z-index: 2;
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid #0e2040;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.puzzle-intro-level-badge {
+  flex-shrink: 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: #4ab0ff;
+  background: rgba(74, 176, 255, 0.1);
+  border: 1px solid rgba(74, 176, 255, 0.25);
+  padding: 4px 8px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.puzzle-intro-header-text {
+  flex: 1;
+}
+
+.puzzle-intro-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: #4ab0ff80;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.puzzle-intro-title {
+  font-family: 'Exo 2', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8f4ff;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
+/* ── Resource tags ───────────────────────────────────────────────── */
+.puzzle-intro-resources {
+  position: relative;
+  z-index: 2;
+  padding: 10px 24px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #0e2040;
+}
+
+.puzzle-intro-resource-tag {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 3px 10px;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+.puzzle-intro-resource-tag--water {
+  color: #4ab0ff;
+  background: rgba(74, 176, 255, 0.1);
+  border: 1px solid rgba(74, 176, 255, 0.2);
+}
+
+.puzzle-intro-resource-tag--energy {
+  color: #ffdd44;
+  background: rgba(255, 221, 68, 0.08);
+  border: 1px solid rgba(255, 221, 68, 0.2);
+}
+
+/* ── Story body ──────────────────────────────────────────────────── */
+.puzzle-intro-body {
+  position: relative;
+  z-index: 2;
+  padding: 22px 24px 18px;
+}
+
+/* Transmission marker */
+.puzzle-intro-transmission {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: #4ab0ff50;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.puzzle-intro-transmission::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #4ab0ff;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #4ab0ff;
+  animation: blinkDot 1.4s ease-in-out infinite;
+}
+
+@keyframes blinkDot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
+.puzzle-intro-story {
+  font-family: 'Exo 2', sans-serif;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.8;
+  color: #8bb8d8;
+  white-space: pre-line;
+}
+
+.puzzle-intro-story strong {
+  color: #c8e0f4;
+  font-weight: 600;
+}
+
+/* ── Objectives strip ────────────────────────────────────────────── */
+.puzzle-intro-objectives {
+  position: relative;
+  z-index: 2;
+  padding: 12px 24px;
+  border-top: 1px solid #0e2040;
+  border-bottom: 1px solid #0e2040;
+  background: rgba(74, 176, 255, 0.03);
+}
+
+.puzzle-intro-objectives-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #4ab0ff60;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.puzzle-intro-objective-item {
+  font-family: 'Exo 2', sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: #5a8aaa;
+  line-height: 1.9;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.puzzle-intro-objective-item::before {
+  content: '—';
+  color: #2a5070;
+  flex-shrink: 0;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────── */
+.puzzle-intro-footer {
+  position: relative;
+  z-index: 2;
+  padding: 16px 24px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.puzzle-intro-hint {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: #2a4860;
+  letter-spacing: 0.1em;
+}
+
+.puzzle-intro-cta {
+  font-family: 'Exo 2', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #080f1e;
+  background: #4ab0ff;
+  border: none;
+  border-radius: 3px;
+  padding: 10px 26px;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.puzzle-intro-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.puzzle-intro-cta:hover {
+  background: #6cc4ff;
+  box-shadow: 0 0 20px rgba(74, 176, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.puzzle-intro-cta:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* ── Corner decorations ──────────────────────────────────────────── */
+.puzzle-intro-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  z-index: 3;
+}
+
+.puzzle-intro-corner--tl { top: 6px; left: 6px; border-top: 1px solid #4ab0ff60; border-left: 1px solid #4ab0ff60; }
+.puzzle-intro-corner--tr { top: 6px; right: 6px; border-top: 1px solid #4ab0ff60; border-right: 1px solid #4ab0ff60; }
+.puzzle-intro-corner--bl { bottom: 6px; left: 6px; border-bottom: 1px solid #4ab0ff60; border-left: 1px solid #4ab0ff60; }
+.puzzle-intro-corner--br { bottom: 6px; right: 6px; border-bottom: 1px solid #4ab0ff60; border-right: 1px solid #4ab0ff60; }

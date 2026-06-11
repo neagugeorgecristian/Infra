@@ -1,15 +1,10 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 
-// Classic game engine (Romania / Bulgaria / Moldova / Balkans)
 import Map from '../components/Map';
-
-// ── NEW: isolated puzzle engine ──────────────────────────────────────────────
-// Only imported when the scenario type requires it.
-// This keeps the classic engine's bundle untouched.
 import PuzzleMap from '../components/PuzzleMap';
+import MinWindowGate from '../components/MinWindowGate';
 
-// Scenarios
 import romania  from '../scenarios/romania';
 import bulgaria from '../scenarios/bulgaria';
 import moldova  from '../scenarios/moldova';
@@ -30,24 +25,24 @@ function GamePage({ selectedMarkers, onMarkerClick }) {
   const scenario = scenarioMap[id];
   if (!scenario) return <p>Scenario not found: {id}</p>;
 
-  // ── Routing branch ────────────────────────────────────────────────────────
-  // puzzle-typed-flow scenarios get their own self-contained controller.
-  // Every other type continues to use the classic Map component unchanged.
-  if (scenario.type === 'puzzle-typed-flow') {
-    return <PuzzleMap key={id} scenario={scenario} />;
-  }
+  const content = scenario.type === 'puzzle-typed-flow'
+    ? <PuzzleMap key={id} scenario={scenario} />
+    : (
+      <Map
+        key={id}
+        scenario={scenario}
+        svgMap={scenario.svgMap}
+        cities={scenario.cities}
+        scenarioName={scenario.name}
+        scenarioType={scenario.type}
+        regionUnlock={scenario.regionUnlock}
+      />
+    );
 
-  // Classic path — props signature unchanged
   return (
-    <Map
-      key={id}
-      scenario={scenario}
-      svgMap={scenario.svgMap}
-      cities={scenario.cities}
-      scenarioName={scenario.name}
-      scenarioType={scenario.type}
-      regionUnlock={scenario.regionUnlock}
-    />
+    <MinWindowGate>
+      {content}
+    </MinWindowGate>
   );
 }
 

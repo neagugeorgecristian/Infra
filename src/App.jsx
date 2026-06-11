@@ -21,7 +21,6 @@ function App() {
   return (
     <Router>
       <div className="app-container">
-        <h1 className="title">Infrastructure game</h1>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route 
@@ -34,6 +33,18 @@ function App() {
             } 
           />
         </Routes>
+        <div style={{
+          position: 'absolute', bottom: '10px',
+          display: 'flex', alignItems: 'center',
+          gap: '6px', fontSize: '18px', color: 'white'
+        }}>
+          <span>Made with ❤️ in the</span>
+          <img
+            src="https://upload.wikimedia.org/wikipedia/commons/b/b7/Flag_of_Europe.svg"
+            alt="EU"
+            style={{ height: '1em' }}
+          />
+        </div>
       </div>
     </Router>
   );

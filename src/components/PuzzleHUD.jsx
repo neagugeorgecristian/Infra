@@ -4,6 +4,7 @@ import './puzzle.css';
 const RESOURCE_ICON = {
   water:  '💧',
   energy: '⚡',
+  goods: '📦',
 };
 
 /**

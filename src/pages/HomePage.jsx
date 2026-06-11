@@ -4,6 +4,7 @@ import romania from '../scenarios/romania';
 import bulgaria from '../scenarios/bulgaria';
 import moldova from '../scenarios/moldova';
 import balkans from '../scenarios/balkans';
+
 import infraPuzzleScenarios from '../scenarios/infraPuzzleLevels';
 
 function HomePage() {
@@ -33,6 +34,7 @@ function HomePage() {
 
   return (
     <div className="homepage">
+      <h1 className="title">Infrastructure game</h1>
       {scenarios.map(s => (
         <div key={s.id} className="scenario-card" onClick={() => navigate(`/scenario/${s.id}`)}>
           {s.label}
@@ -40,15 +42,23 @@ function HomePage() {
       ))}
       <div style={{
         position: 'absolute', bottom: '10px',
+        left: '10px',
         display: 'flex', alignItems: 'center',
         gap: '6px', fontSize: '18px', color: 'white'
-      }}>
-        <span>Made with ❤️ in the</span>
-        <img
-          src="https://upload.wikimedia.org/wikipedia/commons/b/b7/Flag_of_Europe.svg"
-          alt="EU"
-          style={{ height: '1em' }}
-        />
+      }}>Credits:
+        <a href="https://simplemaps.com/" target="_blank" rel="noopener noreferrer">
+          <span>simplemaps.com</span>
+        </a>
+      </div>
+      <div style={{
+        position: 'absolute', bottom: '10px',
+        right: '10px',
+        display: 'flex', alignItems: 'center',
+        gap: '6px', fontSize: '18px', color: 'white'
+      }}>Credits:
+        <a href="https://simplemaps.com/" target="_blank" rel="noopener noreferrer">
+          <span>simplemaps.com</span>
+        </a>
       </div>
     </div>
   );

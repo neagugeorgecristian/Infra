@@ -1,26 +1,25 @@
 import balkansSvg from '../assets/balkans.svg';
 import italySvg from '../assets/it.svg';
 import mdSvg from '../assets/md.svg';
+import franceSvg from '../assets/fr.svg';
 
 /**
- * Typed-flow puzzle scenarios — Levels 1-11.
- *
- * Coordinate system (balkans.svg, viewBox 0 0 1200 1000):
- *   Romania:  x: 22–62%, y: 10–57%
- *   Moldova:  x: 58–80%, y:  6–38%
- *   Bulgaria: x: 23–65%, y: 62–92%
- *
+
  * Each city declares:
  *   role          – 'producer' | 'consumer' | 'hybrid'
  *   produces      – string[]   resource types emitted
  *   needs         – string[]   resource types required
  *   demand        – { [resource]: number }
  *   supplyPerTick – { [resource]: number }
+ *
+ * Each scenario also has an `intro` string — a short atmospheric
+ * briefing shown in the PuzzleIntroModal before play begins.
  */
 
 const R = {
   WATER:  'water',
   ENERGY: 'energy',
+  GOODS: 'goods',
 };
 
 const ROLES = {
@@ -44,6 +43,11 @@ export const infraL1 = {
   id: 'infra-l1', name: 'Infra L1 – First Pipe',
   type: 'puzzle-typed-flow', svgMap: mdSvg,
   budget: 260, resources: [R.WATER],
+  intro: `The old pipes of Chișinău have finally given out.
+
+The engineers say it's simple enough — a single trunk line from the reservoir to Old Town. One pipe, one district, one chance to prove the network can hold.
+
+<strong>Don't overthink it.</strong> Just lay the pipe and keep the water flowing.`,
   objectives: ['Deliver WATER to Old Town', 'Use just 1 connection'],
   stars: starTemplate({ budget2: 240, budget3: 220, maxConnections3: 1 }),
   cities: [
@@ -68,6 +72,11 @@ export const infraL2 = {
   id: 'infra-l2', name: 'Infra L2 – Branching District',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 420, resources: [R.WATER],
+  intro: `Two districts, one reservoir.
+
+The Hill Quarter calls every week — their cisterns have been dry since the summer drought. The Port Quarter is not far behind. Both are counting on you.
+
+<strong>Reservoir Delta has enough for both</strong>, but your budget won't cover a separate line to each. Find the smarter route.`,
   objectives: ['Deliver WATER to Hill Quarter', 'Deliver WATER to Port Quarter'],
   stars: starTemplate({ budget2: 390, budget3: 360, maxConnections3: 2 }),
   cities: [
@@ -97,6 +106,11 @@ export const infraL3 = {
   id: 'infra-l3', name: 'Infra L3 – Tight Budget',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 310, resources: [R.WATER],
+  intro: `The regional ministry has cut the infrastructure fund. Again.
+
+You have €310 to serve two districts — University and Factory Row — from the North Reservoir. The accountants are watching every euro.
+
+<strong>Water can pass through a consumer on its way to the next.</strong> Think in chains, not spokes.`,
   objectives: ['Deliver WATER to all districts', 'Stay within the tight budget'],
   stars: starTemplate({ budget2: 295, budget3: 278, maxConnections3: 2 }),
   cities: [
@@ -126,6 +140,11 @@ export const infraL4 = {
   id: 'infra-l4', name: 'Infra L4 – Twin Utilities',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 620, resources: [R.WATER, R.ENERGY],
+  intro: `The city has grown. A single utility is no longer enough.
+
+River Intake supplies clean water. The Power Plant feeds the grid. Three districts need one or both — and <strong>Metro Core won't function without either</strong>.
+
+This is your first dual-network challenge. Plan both systems before you lay a single line.`,
   objectives: [
     'Deliver WATER to Civic Center',
     'Deliver ENERGY to Industrial Park',
@@ -169,6 +188,11 @@ export const infraL5 = {
   id: 'infra-l5', name: 'Infra L5 – Efficiency Test',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 740, resources: [R.WATER, R.ENERGY],
+  intro: `Engineers have built something clever at the crossroads: <strong>Transfer Hub</strong>.
+
+Feed it energy and it pumps water further than the aquifer alone could reach. Without power, it sits idle — and Harbor District goes dry.
+
+This is infrastructure thinking at its core. Some nodes don't just consume; they multiply what you give them.`,
   objectives: [
     'Power Transfer Hub with ENERGY',
     'Route WATER via Transfer Hub to Harbor District',
@@ -211,13 +235,16 @@ export const infraL5 = {
 
 // ─────────────────────────────────────────────────────────────
 // L6 – The Relay Station  ★★ Medium
-// 6 cities. Key insight: Relay Node boosts water coverage
-// eastward — connecting it cheaply is the winning move.
 // ─────────────────────────────────────────────────────────────
 export const infraL6 = {
   id: 'infra-l6', name: 'Infra L6 – The Relay Station',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 860, resources: [R.WATER, R.ENERGY],
+  intro: `The eastern valleys are cut off. The water from Alpine Spring can't reach them — the terrain is too rugged, the pressure too low.
+
+But there's a decommissioned relay station at the mountain pass. <strong>Power it up and it can push water all the way east.</strong>
+
+Three settlements are waiting. The relay is your key — but it costs electricity to run.`,
   objectives: [
     'Power Relay Node with ENERGY',
     'Route WATER through Relay Node to Eastern Village',
@@ -236,7 +263,6 @@ export const infraL6 = {
       demand: {}, supplyPerTick: { [R.ENERGY]: 2 },
     },
     {
-      // Hybrid: once powered by energy, re-emits water further east
       x: 46, y: 30, cityName: 'Relay Node',
       role: ROLES.HYBRID, produces: [R.WATER], needs: [R.ENERGY],
       demand: { [R.ENERGY]: 1 }, supplyPerTick: { [R.WATER]: 1 },
@@ -261,14 +287,16 @@ export const infraL6 = {
 
 // ─────────────────────────────────────────────────────────────
 // L7 – Dual Circuit  ★★ Medium
-// 7 cities, two resource chains. The Pump Station hybrid means
-// routing energy early unlocks cheaper water distribution.
-// Two districts need both resources — forces crossing the chains.
 // ─────────────────────────────────────────────────────────────
 export const infraL7 = {
   id: 'infra-l7', name: 'Infra L7 – Dual Circuit',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 1050, resources: [R.WATER, R.ENERGY],
+  intro: `Seven nodes. Two grids. Everything is interdependent now.
+
+River Source feeds the water network. Wind Farm owns the electricity. But <strong>Pump Station sits between them</strong> — give it power and it amplifies the water supply to the east side.
+
+Districts Alpha and Delta demand both utilities. The efficient planner sees the crossing points before drawing a single line.`,
   objectives: [
     'Connect all four districts',
     'Deliver WATER + ENERGY to District Alpha and District Delta',
@@ -287,8 +315,6 @@ export const infraL7 = {
       demand: {}, supplyPerTick: { [R.ENERGY]: 2 },
     },
     {
-      // Hybrid: needs energy to pump water further; smart players connect
-      // Wind Farm → Pump Station then Pump Station → eastern consumers
       x: 40, y: 32, cityName: 'Pump Station',
       role: ROLES.HYBRID, produces: [R.WATER], needs: [R.ENERGY],
       demand: { [R.ENERGY]: 1 }, supplyPerTick: { [R.WATER]: 1 },
@@ -318,14 +344,16 @@ export const infraL7 = {
 
 // ─────────────────────────────────────────────────────────────
 // L8 – Italy  ★★★ Medium-Hard
-// 7 cities. Central Hub converts water → energy, creating a
-// second energy source. Players who discover this save connections.
-// Budget is tight: brute-force routing won't reach 3 stars.
 // ─────────────────────────────────────────────────────────────
 export const infraL8 = {
   id: 'infra-l8', name: 'Infra L8 – Italy',
   type: 'puzzle-typed-flow', svgMap: italySvg,
   budget: 600, resources: [R.WATER, R.ENERGY],
+  intro: `The Italian peninsula. Ancient aqueducts, modern grids — and a budget that would make a Roman senator wince.
+
+Genoa controls the water. Milano holds the grid. Roma sits at the center and demands both. But there's a secret in Firenze.
+
+<strong>The city's water treatment plant can generate electricity</strong> — if you pipe water through it first. Masters of this map never run a separate energy cable south of the Alps.`,
   objectives: [
     'Supply both utilities to Capital City',
     'Keep all smaller towns operational',
@@ -344,8 +372,6 @@ export const infraL8 = {
       demand: {}, supplyPerTick: { [R.ENERGY]: 2 },
     },
     {
-      // Converts water to energy — if connected to Genoa,
-      // it becomes a second energy source for the east side
       x: 44, y: 41, cityName: 'Firenze',
       role: ROLES.HYBRID, produces: [R.ENERGY], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: { [R.ENERGY]: 1 },
@@ -375,15 +401,16 @@ export const infraL8 = {
 
 // ─────────────────────────────────────────────────────────────
 // L9 – Cross-Border  ★★★ Hard
-// 8 cities spanning Romania AND Moldova.
-// Two hybrid nodes (Transit City, Moldova Relay) form a
-// cross-border exchange: water flows east, energy flows west.
-// Chisinau needs both — the relay chain must work in both directions.
 // ─────────────────────────────────────────────────────────────
 export const infraL9 = {
-  id: 'infra-l9', name: 'Infra L9 – Cross-Border',
-  type: 'puzzle-typed-flow', svgMap: balkansSvg,
-  budget: 1400, resources: [R.WATER, R.ENERGY],
+  id: 'infra-l9', name: 'Infra L9 – France',
+  type: 'puzzle-typed-flow', svgMap: franceSvg,
+  budget: 1400, resources: [R.WATER, R.ENERGY, R.GOODS],
+  intro: `The Prut river has always been a border. Now it must become a conduit.
+
+Romanian hydro power and Moldovan water sources need to flow in both directions — <strong>Transit City converts energy to water heading east; Moldova Relay converts water to energy heading west.</strong>
+
+Chișinău needs both. Bălți needs the relay chain to work. This is not a domestic project anymore. It's European infrastructure.`,
   objectives: [
     'Connect Romanian infrastructure to Moldova',
     'Supply WATER + ENERGY to Chișinău',
@@ -392,44 +419,42 @@ export const infraL9 = {
   stars: starTemplate({ budget2: 1320, budget3: 1240, maxConnections3: 7 }),
   cities: [
     {
-      x: 30, y: 38, cityName: 'Danube Source',
+      x: 68, y: 65, cityName: 'Lyon',
       role: ROLES.PRODUCER, produces: [R.WATER], needs: [],
       demand: {}, supplyPerTick: { [R.WATER]: 3 },
     },
     {
-      x: 28, y: 20, cityName: 'Hydro Plant',
+      x: 64, y: 22, cityName: 'Lille',
       role: ROLES.PRODUCER, produces: [R.ENERGY], needs: [],
       demand: {}, supplyPerTick: { [R.ENERGY]: 3 },
     },
     {
-      // Romanian side relay: converts energy → extra water supply heading east
-      x: 46, y: 42, cityName: 'Transit City',
+      x: 46, y: 42, cityName: 'Strasbourg',
       role: ROLES.HYBRID, produces: [R.WATER], needs: [R.ENERGY],
       demand: { [R.ENERGY]: 1 }, supplyPerTick: { [R.WATER]: 1 },
     },
     {
-      // Moldovan side relay: converts water → local energy
-      x: 65, y: 24, cityName: 'Moldova Relay',
+      x: 61, y: 92, cityName: 'Marseille',
       role: ROLES.HYBRID, produces: [R.ENERGY], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: { [R.ENERGY]: 1 },
     },
     {
-      x: 68, y: 34, cityName: 'Chișinău',
-      role: ROLES.CONSUMER, produces: [], needs: [R.WATER, R.ENERGY],
-      demand: { [R.WATER]: 1, [R.ENERGY]: 1 }, supplyPerTick: {},
+      x: 72, y: 94, cityName: 'Nice',
+      role: ROLES.CONSUMER, produces: [], needs: [R.GOODS, R.WATER, R.ENERGY],
+      demand: { [R.WATER]: 1, [R.ENERGY]: 1, [R.GOODS]: 1 }, supplyPerTick: {},
     },
     {
-      x: 62, y: 16, cityName: 'Bălți',
-      role: ROLES.CONSUMER, produces: [], needs: [R.ENERGY],
-      demand: { [R.ENERGY]: 1 }, supplyPerTick: {},
+      x: 62, y: 16, cityName: 'Montpellier',
+      role: ROLES.PRODUCER, produces: [R.GOODS], needs: [],
+      demand: {}, supplyPerTick: { [R.GOODS]: 1},
     },
     {
-      x: 54, y: 50, cityName: 'East Romania',
+      x: 19, y: 40, cityName: 'Brest',
       role: ROLES.CONSUMER, produces: [], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: {},
     },
     {
-      x: 40, y: 52, cityName: 'South Romania',
+      x: 45, y: 82, cityName: 'Toulouse',
       role: ROLES.CONSUMER, produces: [], needs: [R.WATER, R.ENERGY],
       demand: { [R.WATER]: 1, [R.ENERGY]: 1 }, supplyPerTick: {},
     },
@@ -438,16 +463,16 @@ export const infraL9 = {
 
 // ─────────────────────────────────────────────────────────────
 // L10 – The Bottleneck  ★★★ Hard
-// 9 cities, 3 producers, 1 central hybrid, 5 consumers.
-// Central Nexus: receives water → emits energy.
-// Optimal play: route water into Nexus early, then use the
-// generated energy to feed 3 energy consumers without separate
-// lines all the way back to Wind Grid / Coal Plant.
 // ─────────────────────────────────────────────────────────────
 export const infraL10 = {
   id: 'infra-l10', name: 'Infra L10 – The Bottleneck',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 1550, resources: [R.WATER, R.ENERGY],
+  intro: `Everything passes through Central Nexus.
+
+Built at the geographic center of the region, this facility was designed to receive water and emit electricity — a conversion plant for the modern age. <strong>Supply it with water and it powers the entire outer rim.</strong>
+
+Nine nodes. Three producers. One bottleneck. The grid is yours to command — but only if you find the flow through the center.`,
   objectives: [
     'Power Central Nexus with WATER',
     'Use Nexus-generated ENERGY for outer rim consumers',
@@ -471,8 +496,6 @@ export const infraL10 = {
       demand: {}, supplyPerTick: { [R.ENERGY]: 2 },
     },
     {
-      // The bottleneck: receives water, becomes an energy hub
-      // Smart routing: connect Spring Valley here, then Nexus fans energy outward
       x: 44, y: 36, cityName: 'Central Nexus',
       role: ROLES.HYBRID, produces: [R.ENERGY], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: { [R.ENERGY]: 2 },
@@ -507,16 +530,18 @@ export const infraL10 = {
 
 // ─────────────────────────────────────────────────────────────
 // L11 – Grand Infrastructure  ★★★ Expert
-// 12 cities across Romania, Moldova, and Bulgaria.
-// 4 producers + 2 hybrids + 6 consumers spanning 3 countries.
-// Balkan Hub links Romania → Moldova chain.
-// Moldova Exchange links Moldova → Bulgaria chain.
-// Only the most efficient routing achieves 3 stars.
 // ─────────────────────────────────────────────────────────────
 export const infraL11 = {
   id: 'infra-l11', name: 'Infra L11 – Heh',
   type: 'puzzle-typed-flow', svgMap: balkansSvg,
   budget: 2000, resources: [R.WATER, R.ENERGY],
+  intro: `Three countries. Four producers. Two hybrid exchange nodes. Six cities in need.
+
+This is the project that ministers argue about. The one that spans the Carpathians, crosses the Prut, and reaches into Bulgaria. <strong>Nothing less than the Balkans' entire infrastructure backbone.</strong>
+
+Balkan Hub and Moldova Exchange are your linchpins — get them right and the rest falls into place. Miss them and you'll spend yourself dry trying to connect everything directly.
+
+The region is watching. Make it hold.`,
   objectives: [
     'Connect Romania, Moldova, and Bulgaria',
     'Satisfy all 6 major consumer cities',
@@ -547,13 +572,11 @@ export const infraL11 = {
     },
     // ── Hybrids ───────────────────────────────────────────────
     {
-      // Romanian hub: converts energy → extra water for eastern Moldova
       x: 44, y: 38, cityName: 'Balkan Hub',
       role: ROLES.HYBRID, produces: [R.WATER], needs: [R.ENERGY],
       demand: { [R.ENERGY]: 1 }, supplyPerTick: { [R.WATER]: 1 },
     },
     {
-      // Moldovan exchange: converts water → local energy for Bulgaria chain
       x: 65, y: 26, cityName: 'Moldova Exchange',
       role: ROLES.HYBRID, produces: [R.ENERGY], needs: [R.WATER],
       demand: { [R.WATER]: 1 }, supplyPerTick: { [R.ENERGY]: 1 },
