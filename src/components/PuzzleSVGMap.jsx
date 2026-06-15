@@ -151,6 +151,55 @@ function computeLineResources(cities, lines) {
   return lineResources;
 }
 
+/**
+ * Build a map of producerName → current connection count for all producer cities.
+ * Used to determine whether a producer is at capacity and lines should grey out.
+ */
+function buildProducerDegreeMap(cities, lines) {
+  const producerNames = new Set(
+    cities.filter(c => c.role === 'producer').map(c => c.cityName)
+  );
+  const degreeMap = new Map();
+
+  lines.filter(l => !l.isDeleted).forEach(l => {
+    const a = l.points[0].cityName;
+    const b = l.points[1].cityName;
+    if (producerNames.has(a)) degreeMap.set(a, (degreeMap.get(a) ?? 0) + 1);
+    if (producerNames.has(b)) degreeMap.set(b, (degreeMap.get(b) ?? 0) + 1);
+  });
+
+  return degreeMap;
+}
+
+/**
+ * Determines the display color of a line based on:
+ * - Whether any producer endpoint is at capacity → grey
+ * - The resource(s) the line carries → resource color
+ * - No resources detected → neutral grey
+ */
+function resolveLineColor(line, cities, lineResourceMap, producerDegreeMap) {
+  const aName = line.points[0].cityName;
+  const bName = line.points[1].cityName;
+
+  // Check if either endpoint is a producer at capacity
+  const isEndpointAtCapacity = [aName, bName].some(name => {
+    const cityDef = cities.find(c => c.cityName === name);
+    if (!cityDef || cityDef.role !== 'producer') return false;
+    const capacity = getTotalSupply(cityDef);
+    const currentDegree = producerDegreeMap.get(name) ?? 0;
+    return capacity > 0 && currentDegree >= capacity;
+  });
+
+  if (isEndpointAtCapacity) return '#555555';
+
+  const resources    = lineResourceMap[line.id];
+  const resourceList = resources ? [...resources] : [];
+
+  if (resourceList.length === 1) return RESOURCE_COLOR[resourceList[0]] ?? '#aaaaaa';
+  if (resourceList.length > 1)  return '#cccccc';
+  return '#666666';
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 function PuzzleSVGMap({
@@ -248,6 +297,10 @@ function PuzzleSVGMap({
   const activatedHybrids = flowResult?.activatedHybrids ?? new Set();
   const lineResourceMap  = computeLineResources(cities, lines);
 
+  // ── Producer capacity tracking ────────────────────────────────────────────
+  // Maps producerName → current degree (connection count)
+  const producerDegreeMap = buildProducerDegreeMap(cities, lines);
+
   return (
     <div
       ref={containerRef}
@@ -282,11 +335,12 @@ function PuzzleSVGMap({
           const pathId = `pp-${lineId}`;
           const pathLen = Math.hypot(toPx.x - fromPx.x, toPx.y - fromPx.y);
 
-          const resources    = lineResourceMap[lineId];
-          const resourceList = resources ? [...resources] : [];
-          const lineColor    = resourceList.length === 1
-            ? RESOURCE_COLOR[resourceList[0]] ?? '#aaaaaa'
-            : resourceList.length > 1 ? '#cccccc' : '#666666';
+          // ── Line color: grey if producer at capacity, resource color otherwise ──
+          const lineColor = resolveLineColor(line, cities, lineResourceMap, producerDegreeMap);
+
+          // Extract resource list for this line so we can gate the particle animation
+          const lineResources = lineResourceMap[lineId];
+          const resourceList  = lineResources ? [...lineResources] : [];
 
           const { keyTimes, keyPoints, keySplines, totalDuration } =
             buildAnimationKeys(wpts, [1]);
@@ -356,12 +410,19 @@ function PuzzleSVGMap({
           const primaryResource = (city.produces ?? [])[0] ?? (city.needs ?? [])[0];
           const resourceColor   = RESOURCE_COLOR[primaryResource] ?? '#aaaaaa';
 
+          // ── Producer capacity state ────────────────────────────────
+          const totalSupply   = getTotalSupply(city);
+          const currentDegree = isProducer ? (producerDegreeMap.get(city.cityName) ?? 0) : 0;
+          const isAtCapacity  = isProducer && totalSupply > 0 && currentDegree >= totalSupply;
+
           // ── Colours ────────────────────────────────────────────────
           const fillColor = isConsumer
             ? (isServed ? '#44cc88' : '#ff6633')
             : isHybrid && !isActivated
               ? '#888888'
-              : resourceColor;
+              : isAtCapacity
+                ? '#555555'   // producer at capacity → grey
+                : resourceColor;
 
           const strokeColor = isSelected
             ? 'white'
@@ -369,15 +430,18 @@ function PuzzleSVGMap({
               ? (isServed ? '#115522' : '#882200')
               : isHybrid && !isActivated
                 ? '#555555'
-                : '#1a4480';
+                : isAtCapacity
+                  ? '#333333'
+                  : '#1a4480';
 
           // ── ViewBox-space coordinates ──────────────────────────────
           const { x: cvbX, y: cvbY } = pct2vb(city.x, city.y);
 
-          // ── Supply label & role label ──────────────────────────────
-          const totalSupply = getTotalSupply(city);
-          const supplyLabel = (isProducer || (isHybrid && isActivated)) && totalSupply > 0
-            ? `×${totalSupply}`
+          // ── Supply badge: capacity used / total ────────────────────
+          // Shown to the right of the city shape for all producers.
+          // e.g. "2/2" for Milano at capacity, "0/2" when empty.
+          const supplyBadgeText = isProducer && totalSupply > 0
+            ? `${currentDegree}/${totalSupply}`
             : null;
 
           const roleLabel = isProducer
@@ -419,19 +483,23 @@ function PuzzleSVGMap({
                 pointerEvents="auto"
               />
 
-              {/* Pulse ring — producers only */}
+              {/* Pulse ring — producers only (dimmed when at capacity) */}
               {isProducer && (
                 <circle
                   cx={cvbX}
                   cy={cvbY}
                   r="12"
                   fill="none"
-                  stroke={resourceColor}
+                  stroke={isAtCapacity ? '#444444' : resourceColor}
                   strokeWidth="1.5"
-                  opacity="0.35"
+                  opacity={isAtCapacity ? 0.2 : 0.35}
                 >
-                  <animate attributeName="r" values="10;22;10" dur="2.4s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.4;0;0.4" dur="2.4s" repeatCount="indefinite" />
+                  {!isAtCapacity && (
+                    <>
+                      <animate attributeName="r" values="10;22;10" dur="2.4s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.4;0;0.4" dur="2.4s" repeatCount="indefinite" />
+                    </>
+                  )}
                 </circle>
               )}
 
@@ -491,19 +559,35 @@ function PuzzleSVGMap({
                 isActivated={isActivated}
               />
 
-              {/* Supply count badge (top-right of shape) */}
-              {supplyLabel && (
-                <text
-                  x={cvbX + 11}
-                  y={cvbY - 8}
-                  textAnchor="middle"
-                  fontSize="9"
-                  fontWeight="bold"
-                  fill={resourceColor}
-                  style={{ userSelect: 'none', pointerEvents: 'none' }}
-                >
-                  {supplyLabel}
-                </text>
+              {/* ── Supply capacity badge (right of shape) ────────────
+                  Shows "used/total" e.g. "1/2" or "3/3".
+                  Turns red when at capacity, green when available.       */}
+              {supplyBadgeText && (
+                <g style={{ pointerEvents: 'none' }}>
+                  {/* Small pill background */}
+                  <rect
+                    x={cvbX + SHAPE_RADIUS + 3}
+                    y={cvbY - 8}
+                    width={26}
+                    height={14}
+                    rx={4}
+                    fill={isAtCapacity ? '#440000' : '#001a33'}
+                    fillOpacity="0.82"
+                    stroke={isAtCapacity ? '#cc3322' : '#2a5a8a'}
+                    strokeWidth="0.8"
+                  />
+                  <text
+                    x={cvbX + SHAPE_RADIUS + 16}
+                    y={cvbY + 3}
+                    textAnchor="middle"
+                    fontSize="9"
+                    fontWeight="bold"
+                    fill={isAtCapacity ? '#ff7766' : resourceColor}
+                    style={{ userSelect: 'none', fontFamily: 'Share Tech Mono, monospace' }}
+                  >
+                    {supplyBadgeText}
+                  </text>
+                </g>
               )}
 
               {/* City name */}
@@ -527,7 +611,7 @@ function PuzzleSVGMap({
                 fontSize="9"
                 fill={
                   (isProducer || (isHybrid && isActivated))
-                    ? resourceColor
+                    ? (isAtCapacity ? '#886655' : resourceColor)
                     : isServed ? '#aaffcc' : '#ffbbaa'
                 }
                 style={{ userSelect: 'none', pointerEvents: 'none' }}

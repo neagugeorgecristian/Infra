@@ -12,7 +12,7 @@ import { calculateLineCost } from './utils.js';
 import { useEventSystem, EventBanner } from './EventSystem';
 import { SPAWNABLE_CITIES } from './CitySpawner';
 import ObjectivePanel from './ObjectivePanel';
-import { evaluateTypedFlow } from './PuzzleFlow';
+import { evaluateTypedFlow, EMPTY_FLOW_RESULT } from './PuzzleFlow';
 
 import './Map.css';
 
@@ -73,7 +73,6 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
   const [money, setMoney] = useState(initialBudget);
 
   const GAME_DURATION = 360;
-  const TARGET_MONEY = 2500;
 
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [gameOverMessage, setGameOverMessage] = useState(null);
@@ -89,7 +88,7 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     () => regionUnlock?.initialUnlocked ?? []
   );
 
-  const [gameOverType, setGameOverType] = useState(null); // null | 'timeout' | 'collapse'
+  const [gameOverType, setGameOverType] = useState(null);
   const [completedObjectives, setCompletedObjectives] = useState([]);
 
   const timerRef = useRef(null);
@@ -102,9 +101,9 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
   const completedObjectivesRef = useRef([]);
   const prevPhaseRef = useRef(0);
 
-  const [puzzleStats, setPuzzleStats] = useState(() =>
-    isPuzzleMode ? evaluateTypedFlow({ cities, lines: [] }) : null
-  );
+  // evaluateTypedFlow is now async (backend call). Use EMPTY_FLOW_RESULT as
+  // the synchronous placeholder; the useEffect below will populate it.
+  const [puzzleStats, setPuzzleStats] = useState(EMPTY_FLOW_RESULT);
 
   useEffect(() => { moneyRef.current = money; }, [money]);
   useEffect(() => { satisfactionRef.current = satisfactionMap; }, [satisfactionMap]);
@@ -112,7 +111,6 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
   useEffect(() => { passengersRef.current = passengersDelivered; }, [passengersDelivered]);
   useEffect(() => { completedObjectivesRef.current = completedObjectives; }, [completedObjectives]);
 
-  // Stop all intervals the moment game over is set
   useEffect(() => {
     if (gameOverMessage) {
       gameOverRef.current = true;
@@ -121,13 +119,12 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
   }, [gameOverMessage]);
 
   const gamePhase = timeLeft > 300 ? 0
-  : timeLeft > 240 ? 1
-  : timeLeft > 180 ? 2
-  : timeLeft > 120 ? 3
-  : timeLeft > 60  ? 4
-  : 5;
+    : timeLeft > 240 ? 1
+    : timeLeft > 180 ? 2
+    : timeLeft > 120 ? 3
+    : timeLeft > 60  ? 4
+    : 5;
 
-  // Check objective when phase advances
   useEffect(() => {
     const prev = prevPhaseRef.current;
     if (gamePhase > prev && prev < OBJECTIVES.length && !gameOverRef.current) {
@@ -143,8 +140,6 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     }
     prevPhaseRef.current = gamePhase;
   }, [gamePhase]);
-
-
 
   const { activeEvent } = useEventSystem({
     gamePhase,
@@ -178,8 +173,6 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
           clearInterval(timerRef.current);
           const count = completedObjectivesRef.current.length;
           const medal = count >= 5 ? '🥇 Gold' : count >= 3 ? '🥈 Silver' : '🥉 Bronze';
-          const satVals = Object.values(satisfactionRef.current);
-          const avgSatisfaction = satVals.reduce((a, b) => a + b, 0) / satVals.length;
           setGameOverType('timeout');
           setGameOverMessage(`${medal} — ${count}/5 objectives completed`);
           return 0;
@@ -192,7 +185,7 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
 
   useEffect(() => {
     const incomeInterval = setInterval(() => {
-      if (gameOverRef.current) return; // Issue 5: stop after game over
+      if (gameOverRef.current) return;
 
       const currentLines = linesRef.current;
       const currentSatisfaction = satisfactionRef.current;
@@ -224,7 +217,7 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
           updatedSatisfaction[city] = Math.max(0, satisfaction - 1);
         } else {
           const growthRate = Math.min((connectionCount - 1) * 3, 9);
-          updatedSatisfaction[city] = Math.min(100, satisfaction + growthRate); // Issue 6: hard cap
+          updatedSatisfaction[city] = Math.min(100, satisfaction + growthRate);
 
           const hasUpgrade = currentLines.some(l =>
             !l.isDeleted &&
@@ -237,12 +230,11 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
         }
       }
 
-      // Issue 4: collapse if any city sits at 0 for 2 consecutive ticks (10s)
       for (const [city, sat] of Object.entries(updatedSatisfaction)) {
         if (sat <= 0) {
           zeroCitiesRef.current[city] = (zeroCitiesRef.current[city] || 0) + 1;
           if (zeroCitiesRef.current[city] >= 2) {
-            gameOverRef.current = true; // set immediately so no further ticks fire
+            gameOverRef.current = true;
             setGameOverType('collapse');
             setGameOverMessage(`💥 Infrastructure crumbled — ${city} was abandoned.`);
             return;
@@ -285,16 +277,32 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     return () => clearInterval(incomeInterval);
   }, []);
 
+  // Puzzle mode: async flow evaluation via backend
   useEffect(() => {
     if (!isPuzzleMode || gameOverMessage) return;
 
-    const stats = evaluateTypedFlow({ cities: activeCities, lines });
-    setPuzzleStats(stats);
+    let cancelled = false;
 
-    if (stats.allDemandsMet) {
-      setGameOverType('timeout');
-      setGameOverMessage('✅ All required resources delivered!');
-    }
+    (async () => {
+      let stats;
+      try {
+        stats = await evaluateTypedFlow({ cities: activeCities, lines });
+      } catch (err) {
+        console.error('Flow evaluation failed:', err);
+        return;
+      }
+
+      if (cancelled) return;
+
+      setPuzzleStats(stats);
+
+      if (stats.allDemandsMet) {
+        setGameOverType('timeout');
+        setGameOverMessage('✅ All required resources delivered!');
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [isPuzzleMode, activeCities, lines, gameOverMessage]);
 
   const trySpendMoney = (amount, onSuccess) => {
@@ -365,7 +373,6 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
         };
         setLines(prev => [...prev, newLine]);
 
-        // Clear isNew after the draw animation finishes (1.1s = animation duration + buffer)
         setTimeout(() => {
           setLines(prev =>
             prev.map(l => l.id === newLine.id ? { ...l, isNew: false } : l)
@@ -522,58 +529,56 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
         {!gameOverMessage && <ObjectivePanel
           gamePhase={gamePhase}
           completedCount={completedObjectives.length}
-          objectives={isPuzzleMode ? scenario?.objectives : undefined} /> 
+          objectives={isPuzzleMode ? scenario?.objectives : undefined} />
         }
       </div>
 
       {gameOverMessage && (
-      <div style={{
-        position: 'absolute', top: '50%', left: '50%',
-        transform: 'translate(-50%, -50%)',
-        background: '#111', color: 'white',
-        padding: '40px', borderRadius: '16px',
-        fontSize: '18px', textAlign: 'center',
-        zIndex: 1000, minWidth: '320px',
-        border: '2px solid #444'
-      }}>
-        <div style={{ fontSize: '28px', marginBottom: '20px' }}>{gameOverMessage}</div>
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: '#111', color: 'white',
+          padding: '40px', borderRadius: '16px',
+          fontSize: '18px', textAlign: 'center',
+          zIndex: 1000, minWidth: '320px',
+          border: '2px solid #444'
+        }}>
+          <div style={{ fontSize: '28px', marginBottom: '20px' }}>{gameOverMessage}</div>
 
-        {gameOverType === 'timeout' && (
-          <>
-            <div style={{ marginBottom: '8px' }}>🧳 Passengers: <strong>{passengersDelivered}</strong></div>
-            <div style={{ marginBottom: '8px' }}>
-              😊 Avg satisfaction: <strong>{(() => {
-                const vals = Object.values(satisfactionMap);
-                return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-              })()}%</strong>
-            </div>
-            <div style={{ marginBottom: '8px' }}>💰 Final balance: <strong>€{money}</strong></div>
-            <div style={{ marginBottom: '20px' }}>🎯 Objectives: <strong>{completedObjectives.length}/5</strong></div>
-          </>
-        )}
+          {gameOverType === 'timeout' && (
+            <>
+              <div style={{ marginBottom: '8px' }}>🧳 Passengers: <strong>{passengersDelivered}</strong></div>
+              <div style={{ marginBottom: '8px' }}>
+                😊 Avg satisfaction: <strong>{(() => {
+                  const vals = Object.values(satisfactionMap);
+                  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+                })()}%</strong>
+              </div>
+              <div style={{ marginBottom: '8px' }}>💰 Final balance: <strong>€{money}</strong></div>
+              <div style={{ marginBottom: '20px' }}>🎯 Objectives: <strong>{completedObjectives.length}/5</strong></div>
+            </>
+          )}
 
-        {isPuzzleMode && puzzleStats && (
-          <>
-            <div style={{ marginBottom: '8px' }}>
-              🔌 Needs Met: <strong>{puzzleStats.metNeeds}/{puzzleStats.totalNeeds}</strong>
-            </div>
-            <div style={{ marginBottom: '8px' }}>
-              📊 Efficiency: <strong>{puzzleStats.efficiency}%</strong>
-            </div>
-            <div style={{ marginBottom: '8px' }}>
-              💰 Spent: <strong>€{Math.max(0, initialBudget - money)}</strong>
-            </div>
-            <div style={{ marginBottom: '20px' }}>
-              🧩 Connections: <strong>{lines.filter(l => !l.isDeleted).length}</strong>
-            </div>
-          </>
-        )}
+          {isPuzzleMode && puzzleStats && (
+            <>
+              <div style={{ marginBottom: '8px' }}>
+                🔌 Needs Met: <strong>{puzzleStats.metNeeds}/{puzzleStats.totalNeeds}</strong>
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                📊 Efficiency: <strong>{puzzleStats.efficiency}%</strong>
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                💰 Spent: <strong>€{Math.max(0, initialBudget - money)}</strong>
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                🧩 Connections: <strong>{lines.filter(l => !l.isDeleted).length}</strong>
+              </div>
+            </>
+          )}
 
-        <button onClick={() => window.location.reload()}>Play Again</button>
-      </div>
-    )}
-
-
+          <button onClick={() => window.location.reload()}>Play Again</button>
+        </div>
+      )}
     </div>
   );
 }

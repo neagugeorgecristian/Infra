@@ -6,7 +6,7 @@ import PuzzleHUD, { calculateStarCount } from './PuzzleHUD';
 import NavigatorPanel from './NavigatorPanel';
 import PuzzleIntroModal from './PuzzleIntroModal';
 import { calculateLineCost } from './utils.js';
-import { evaluateTypedFlow, computeDegreeMap, isAtMaxDegree } from './PuzzleFlow';
+import { evaluateTypedFlow, computeDegreeMap, isAtMaxDegree, EMPTY_FLOW_RESULT } from './PuzzleFlow';
 import { PUZZLE_LEVEL_ORDER } from '../scenarios/infraPuzzleLevels';
 
 import './puzzle.css';
@@ -134,9 +134,11 @@ function PuzzleMap({ scenario }) {
   const [selectedMarkers, setSelectedMarkers] = useState([]);
   const [lineMenu,        setLineMenu]        = useState({ visible: false, position: { x: 0, y: 0 }, line: null });
   const [gameOver,        setGameOver]        = useState(null); // null | 'success' | 'fail'
-  const [flowResult,      setFlowResult]      = useState(() =>
-    evaluateTypedFlow({ cities: initialCities, lines: [] })
-  );
+
+  // evaluateTypedFlow is now async (backend call), so we can't call it
+  // synchronously inside useState(). Start with an empty placeholder result
+  // and let the useEffect below populate it on mount.
+  const [flowResult,      setFlowResult]      = useState(EMPTY_FLOW_RESULT);
 
   const moneyRef = useRef(money);
   const linesRef = useRef(lines);
@@ -156,26 +158,43 @@ function PuzzleMap({ scenario }) {
     // Don't evaluate while the intro is showing — no interaction has happened yet
     if (showIntro) return;
 
-    const result = evaluateTypedFlow({ cities: initialCities, lines });
-    setFlowResult(result);
+    // Guards against setting state after this effect's lines have changed again
+    // (i.e. a stale response arriving after a newer request was fired).
+    let cancelled = false;
 
-    if (result.allDemandsMet && !gameOver) {
-      setGameOver('success');
-      return;
-    }
-
-    if (!result.allDemandsMet && !gameOver) {
-      // Fail: connection limit reached
-      if (connectionLimit != null && activeLines.length >= connectionLimit) {
-        setGameOver('fail');
+    (async () => {
+      let result;
+      try {
+        result = await evaluateTypedFlow({ cities: initialCities, lines });
+      } catch (err) {
+        console.error('Flow evaluation failed:', err);
         return;
       }
-      // Fail: budget exhausted and no affordable connection remains
-      const minCost = getMinRemainingConnectionCost(initialCities, lines, calculateLineCost);
-      if (minCost > 0 && moneyRef.current < minCost) {
-        setGameOver('fail');
+
+      if (cancelled) return;
+
+      setFlowResult(result);
+
+      if (result.allDemandsMet && !gameOver) {
+        setGameOver('success');
+        return;
       }
-    }
+
+      if (!result.allDemandsMet && !gameOver) {
+        // Fail: connection limit reached
+        if (connectionLimit != null && activeLines.length >= connectionLimit) {
+          setGameOver('fail');
+          return;
+        }
+        // Fail: budget exhausted and no affordable connection remains
+        const minCost = getMinRemainingConnectionCost(initialCities, lines, calculateLineCost);
+        if (minCost > 0 && moneyRef.current < minCost) {
+          setGameOver('fail');
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [lines, initialCities, gameOver, connectionLimit, activeLines.length, showIntro]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────

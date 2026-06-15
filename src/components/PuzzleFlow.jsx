@@ -1,234 +1,59 @@
 /**
- * PuzzleFlow.jsx — Edmonds-Karp max-flow with correct directional producer rule.
+ * PuzzleFlow.jsx — Frontend shim.
  *
- * THE CORE RULE:
- *   Any city with role === 'producer' is a pure source for ALL resources.
- *   No resource of any type can flow INTO a producer city.
- *   Edges adjacent to producers are always one-way OUTWARD, regardless of
- *   which resource is being evaluated.
+ * computeDegreeMap, isAtMaxDegree, and buildAdjacency remain pure local
+ * functions (they are synchronous helpers used in rendering, not flow eval).
  *
- *   Example: Wind Farm produces energy.  Water cannot flow through Wind Farm
- *   to reach a downstream consumer — even though Wind Farm produces no water.
- *   Wind Farm is simply not a transit node for anything.
+ * evaluateTypedFlow is now async and calls the backend API.
+ * The returned shape is identical to the old synchronous version, with one
+ * difference: activatedHybrids comes back as a Set (converted from the
+ * Array the backend serialises over JSON).
  *
- * Hybrids are bidirectional transit nodes. They receive an input resource and,
- * once that demand is met, they emit an output resource. Other resources can
- * still flow through them freely.
+ * Callers inside useEffect should await it:
+ *   const result = await evaluateTypedFlow({ cities, lines });
+ *
+ * The EMPTY_RESULT constant is provided for useState initialisers that need
+ * a synchronous placeholder before the first API response arrives.
  */
 
-// ── Edmonds-Karp (BFS Ford-Fulkerson) ────────────────────────────────────────
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
-function edmondsKarp(cap, source, sink) {
-  const n    = cap.length;
-  const flow = Array.from({ length: n }, () => new Array(n).fill(0));
+// ── Empty result used as the synchronous initial value in useState() ──────────
 
-  while (true) {
-    const parent = new Array(n).fill(-1);
-    parent[source] = source;
-    const queue   = [source];
-    let   reached = false;
+export const EMPTY_FLOW_RESULT = {
+  totalNeeds:      0,
+  metNeeds:        0,
+  unmetNeeds:      0,
+  efficiency:      100,
+  consumerStatus:  [],
+  allDemandsMet:   false,
+  activatedHybrids: new Set(),
+};
 
-    outer:
-    while (queue.length) {
-      const u = queue.shift();
-      for (let v = 0; v < n; v++) {
-        if (parent[v] === -1 && cap[u][v] - flow[u][v] > 0) {
-          parent[v] = u;
-          if (v === sink) { reached = true; break outer; }
-          queue.push(v);
-        }
-      }
-    }
+// ── Async flow evaluation (calls backend) ─────────────────────────────────────
 
-    if (!reached) break;
+export async function evaluateTypedFlow({ cities = [], lines = [] }) {
+  const response = await fetch(`${API_BASE}/api/evaluate-flow`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ cities, lines }),
+  });
 
-    let bottleneck = Infinity;
-    for (let v = sink; v !== source; ) {
-      const u = parent[v];
-      bottleneck = Math.min(bottleneck, cap[u][v] - flow[u][v]);
-      v = u;
-    }
-
-    for (let v = sink; v !== source; ) {
-      const u = parent[v];
-      flow[u][v] += bottleneck;
-      flow[v][u] -= bottleneck;
-      v = u;
-    }
+  if (!response.ok) {
+    throw new Error(`evaluate-flow API error: ${response.status}`);
   }
 
-  return flow;
-}
+  const data = await response.json();
 
-// ── Effective supply map ──────────────────────────────────────────────────────
-
-function getEffectiveSupply(cities, activatedHybrids) {
-  const supplyMap = new Map();
-  cities.forEach(c => {
-    const isHybrid = c.role === 'hybrid';
-    const active   = !isHybrid || activatedHybrids.has(c.cityName);
-    const supply   = {};
-    if (active) {
-      Object.entries(c.supplyPerTick ?? {}).forEach(([r, v]) => {
-        supply[r] = (supply[r] ?? 0) + v;
-      });
-    }
-    supplyMap.set(c.cityName, supply);
-  });
-  return supplyMap;
-}
-
-// ── Single-resource max-flow ──────────────────────────────────────────────────
-
-function runFlowForResource(resource, cities, effectiveSupply, lines) {
-  const N      = cities.length;
-  const SOURCE = 0;
-  const SINK   = N + 1;
-  const NODES  = N + 2;
-
-  const cityIdx = new Map(cities.map((c, i) => [c.cityName, i + 1]));
-  const cap     = Array.from({ length: NODES }, () => new Array(NODES).fill(0));
-
-  // THE KEY FIX:
-  // Use role === 'producer' to determine directionality — NOT which resource
-  // the city happens to produce.  A wind farm cannot relay water.  A dam
-  // cannot relay electricity.  Producers are pure sources for the whole graph.
-  const producerSet = new Set(
-    cities.filter(c => c.role === 'producer').map(c => c.cityName)
-  );
-
-  // Source → each city actively supplying this resource
-  cities.forEach((c, i) => {
-    const supply = effectiveSupply.get(c.cityName)?.[resource] ?? 0;
-    if (supply > 0) cap[SOURCE][i + 1] += supply;
-  });
-
-  // Connection edges — direction enforced by producer role
-  lines.filter(l => !l.isDeleted).forEach(l => {
-    const aName = l.points[0].cityName;
-    const bName = l.points[1].cityName;
-    const a = cityIdx.get(aName);
-    const b = cityIdx.get(bName);
-    if (a == null || b == null) return;
-
-    const aIsProd = producerSet.has(aName);
-    const bIsProd = producerSet.has(bName);
-
-    if (aIsProd && !bIsProd) {
-      // A is a producer: flow only A → B (nothing flows back into A)
-      cap[a][b] += 1;
-    } else if (!aIsProd && bIsProd) {
-      // B is a producer: flow only B → A (nothing flows back into B)
-      cap[b][a] += 1;
-    } else {
-      // Both non-producers: bidirectional (hybrids, consumers can relay freely)
-      cap[a][b] += 1;
-      cap[b][a] += 1;
-    }
-  });
-
-  // Consumers → sink
-  cities.forEach((c, i) => {
-    const demand = (c.demand ?? {})[resource] ?? 0;
-    if (demand > 0) cap[i + 1][SINK] += demand;
-  });
-
-  const flowMatrix = edmondsKarp(cap, SOURCE, SINK);
-
-  const result = new Map();
-  cities.forEach((c, i) => {
-    const demand = (c.demand ?? {})[resource] ?? 0;
-    if (demand > 0) {
-      result.set(c.cityName, {
-        received: Math.max(0, flowMatrix[i + 1][SINK]),
-        demand,
-      });
-    }
-  });
-
-  return result;
-}
-
-// ── Public API ────────────────────────────────────────────────────────────────
-
-export function evaluateTypedFlow({ cities = [], lines = [] }) {
-  const resourceTypes = new Set();
-  cities.forEach(c => {
-    Object.keys(c.supplyPerTick ?? {}).forEach(r => resourceTypes.add(r));
-    Object.keys(c.demand        ?? {}).forEach(r => resourceTypes.add(r));
-  });
-
-  // Iterative hybrid activation (fixed-point convergence)
-  const activatedHybrids = new Set();
-  let allResourceResults  = new Map();
-
-  for (let iter = 0; iter <= cities.length; iter++) {
-    const prevSize        = activatedHybrids.size;
-    const effectiveSupply = getEffectiveSupply(cities, activatedHybrids);
-
-    allResourceResults = new Map();
-    for (const r of resourceTypes) {
-      allResourceResults.set(r, runFlowForResource(r, cities, effectiveSupply, lines));
-    }
-
-    // Activate any hybrid whose every input demand is now met
-    cities
-      .filter(c => c.role === 'hybrid' && !activatedHybrids.has(c.cityName))
-      .forEach(h => {
-        const entries = Object.entries(h.demand ?? {});
-        if (!entries.length) return;
-        const allMet = entries.every(([r, d]) => {
-          const info = allResourceResults.get(r)?.get(h.cityName);
-          return (info?.received ?? 0) >= d;
-        });
-        if (allMet) activatedHybrids.add(h.cityName);
-      });
-
-    if (activatedHybrids.size === prevSize) break;
-  }
-
-  // Build consumer status
-  let totalNeeds = 0;
-  let metNeeds   = 0;
-  const consumerStatus = [];
-
-  cities.forEach(c => {
-    const needs = c.needs ?? [];
-    if (!needs.length) return;
-
-    const perType = {};
-    let   allMet  = true;
-
-    needs.forEach(r => {
-      totalNeeds += 1;
-      const info     = allResourceResults.get(r)?.get(c.cityName);
-      const received = info?.received ?? 0;
-      const demand   = info?.demand   ?? (c.demand?.[r] ?? 1);
-      const met      = received >= demand;
-      perType[r]     = { met, received, demand };
-      if (met) metNeeds += 1;
-      else     allMet = false;
-    });
-
-    consumerStatus.push({ cityName: c.cityName, needs, perType, allMet });
-  });
-
-  const efficiency = totalNeeds === 0
-    ? 100
-    : Math.round((metNeeds / totalNeeds) * 100);
-
+  // Backend serialises activatedHybrids as an Array for JSON safety.
+  // Convert back to a Set so the rest of the frontend code is unchanged.
   return {
-    totalNeeds,
-    metNeeds,
-    unmetNeeds: totalNeeds - metNeeds,
-    efficiency,
-    consumerStatus,
-    allDemandsMet: totalNeeds > 0 && metNeeds === totalNeeds,
-    activatedHybrids,
+    ...data,
+    activatedHybrids: new Set(data.activatedHybrids ?? []),
   };
 }
 
-// ── Degree helpers ────────────────────────────────────────────────────────────
+// ── Degree helpers (stay local — pure sync, used in render paths) ─────────────
 
 export function computeDegreeMap(lines) {
   const degree = new Map();
