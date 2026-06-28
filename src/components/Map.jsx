@@ -8,9 +8,9 @@ import InfoPanel from './InfoPanel';
 import NavigatorPanel from './NavigatorPanel';
 import MoneyPanel from './MoneyPanel';
 import LegendPanel from './LegendPanel';
-import { calculateLineCost } from './utils.js';
+import { calculateLineCost, confirmLineCost } from './utils.js';
 import { useEventSystem, EventBanner } from './EventSystem';
-import { SPAWNABLE_CITIES } from './CitySpawner';
+import { getSpawnableCity } from './CitySpawner';
 import ObjectivePanel from './ObjectivePanel';
 import { evaluateTypedFlow, EMPTY_FLOW_RESULT } from './PuzzleFlow';
 
@@ -149,18 +149,32 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     active: !gameOverMessage && !isPuzzleMode
   });
 
-  // City spawning
+  // City spawning — async backend lookup (getSpawnableCity), guarded against
+  // stale responses the same way the puzzle-flow evaluation effect below is.
+  // The lookup runs once per timeLeft tick, mirroring the original
+  // synchronous SPAWNABLE_CITIES[...].find() behaviour, just over the wire.
   useEffect(() => {
-    const spawnList = SPAWNABLE_CITIES[scenarioName?.toLowerCase()] || [];
-    const toSpawn = spawnList.find(s => s.appearAtTimeLeft === timeLeft);
-    if (!toSpawn) return;
+    let cancelled = false;
 
-    const newCity = toSpawn.city;
-    setActiveCities(prev => [...prev, newCity]);
-    setSatisfactionMap(prev => ({ ...prev, [newCity.cityName]: 50 }));
-    setNewCityFlash(newCity.cityName);
-    setTimeout(() => setNewCityFlash(null), 3000);
-  }, [timeLeft]);
+    (async () => {
+      let newCity;
+      try {
+        newCity = await getSpawnableCity(scenarioName, timeLeft);
+      } catch (err) {
+        console.error('Spawn lookup failed:', err);
+        return;
+      }
+
+      if (cancelled || !newCity) return;
+
+      setActiveCities(prev => [...prev, newCity]);
+      setSatisfactionMap(prev => ({ ...prev, [newCity.cityName]: 50 }));
+      setNewCityFlash(newCity.cityName);
+      setTimeout(() => setNewCityFlash(null), 3000);
+    })();
+
+    return () => { cancelled = true; };
+  }, [timeLeft, scenarioName]);
 
   const handleBackToMenu = () => navigate('/');
 
@@ -342,7 +356,7 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     trySpendMoney(cost, commitUnlock);
   };
 
-  const handleMarkerSelect = ({ x, y, cityName }) => {
+  const handleMarkerSelect = async ({ x, y, cityName }) => {
     if (gameOverMessage) return;
 
     if (selectedMarkers.length === 1 && selectedMarkers[0].cityName !== cityName) {
@@ -362,7 +376,19 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
         return;
       }
 
-      const cost = calculateLineCost(point1, point2);
+      // confirmLineCost is the backend-authoritative price — it must be
+      // awaited before any money actually changes hands. The local
+      // calculateLineCost() (used for the hover tooltip) is preview-only.
+      let cost;
+      try {
+        cost = await confirmLineCost(point1, point2);
+      } catch (err) {
+        console.error('Line cost confirmation failed:', err);
+        alert('Could not confirm connection price. Please try again.');
+        setSelectedMarkers([]);
+        return;
+      }
+
       trySpendMoney(cost, () => {
         const newLine = {
           id: Date.now(),
@@ -411,7 +437,7 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     setInfoCity(null);
   };
 
-  const handleToggleUpgradeLine = () => {
+  const handleToggleUpgradeLine = async () => {
     const target = linesRef.current.find(line =>
       line.points[0].cityName === lineOptions.line.points[0].cityName &&
       line.points[1].cityName === lineOptions.line.points[1].cityName &&
@@ -419,7 +445,16 @@ function Map({ scenario, svgMap, cities, scenarioName, scenarioType, regionUnloc
     );
     if (!target) return;
 
-    const baseCost = calculateLineCost(target.points[0], target.points[1]);
+    // Backend-authoritative base cost — the actual charge/refund must be
+    // derived from this, not the local preview formula.
+    let baseCost;
+    try {
+      baseCost = await confirmLineCost(target.points[0], target.points[1]);
+    } catch (err) {
+      console.error('Line cost confirmation failed:', err);
+      alert('Could not confirm connection price. Please try again.');
+      return;
+    }
 
     if (target.className === 'singleline') {
       if (!trySpendMoney(Math.round(baseCost * 1.5), () => {})) return;

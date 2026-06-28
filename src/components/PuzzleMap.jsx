@@ -5,7 +5,7 @@ import PuzzleSVGMap from './PuzzleSVGMap';
 import PuzzleHUD, { calculateStarCount } from './PuzzleHUD';
 import NavigatorPanel from './NavigatorPanel';
 import PuzzleIntroModal from './PuzzleIntroModal';
-import { calculateLineCost } from './utils.js';
+import { calculateLineCost, confirmLineCost } from './utils.js';
 import { evaluateTypedFlow, computeDegreeMap, isAtMaxDegree, EMPTY_FLOW_RESULT } from './PuzzleFlow';
 import { PUZZLE_LEVEL_ORDER } from '../scenarios/infraPuzzleLevels';
 
@@ -13,7 +13,16 @@ import './puzzle.css';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Minimum cost of any unbuilt connection — used to detect budget-fail. */
+/**
+ * Minimum cost of any unbuilt connection — used to detect budget-fail.
+ *
+ * Uses the local synchronous calculateLineCost() (preview formula) rather
+ * than confirmLineCost(), because this scans every unbuilt city pair on
+ * every lines/cities change (see the useEffect below) — going async here
+ * would mean a network request per pair on every render, which doesn't
+ * scale and isn't needed since this never charges money; it only decides
+ * whether to show the "out of budget" game-over screen.
+ */
 function getMinRemainingConnectionCost(cities, lines, calcCost) {
   const existing = new Set(
     lines
@@ -203,69 +212,102 @@ function PuzzleMap({ scenario }) {
     setShowIntro(false);
   }, []);
 
-  const handleMarkerClick = useCallback((city) => {
+  const handleMarkerClick = useCallback(async (city) => {
     if (gameOver) return;
 
-    setSelectedMarkers(prev => {
-      if (prev.length === 0) return [city];
+    // selectedMarkers must be read/cleared via its current value, but the
+    // purchase itself now requires an awaited backend call. We resolve the
+    // "first" / "second click" branching synchronously first (no network
+    // call needed for that), then run the priced commit asynchronously only
+    // when a genuine new connection is being attempted.
+    if (selectedMarkers.length === 0) {
+      setSelectedMarkers([city]);
+      return;
+    }
 
-      const first = prev[0];
-      if (first.cityName === city.cityName) return [];
+    const first = selectedMarkers[0];
+    if (first.cityName === city.cityName) {
+      setSelectedMarkers([]);
+      return;
+    }
 
-      const currentLines = linesRef.current;
-      const currentMoney = moneyRef.current;
+    const currentLines = linesRef.current;
+    const currentMoney = moneyRef.current;
 
-      // Already connected?
-      const exists = currentLines.find(l =>
-        !l.isDeleted && (
-          (l.points[0].cityName === first.cityName && l.points[1].cityName === city.cityName) ||
-          (l.points[0].cityName === city.cityName  && l.points[1].cityName === first.cityName)
-        )
-      );
-      if (exists) {
-        alert(`${first.cityName} and ${city.cityName} are already connected.`);
-        return [];
-      }
+    // Already connected?
+    const exists = currentLines.find(l =>
+      !l.isDeleted && (
+        (l.points[0].cityName === first.cityName && l.points[1].cityName === city.cityName) ||
+        (l.points[0].cityName === city.cityName  && l.points[1].cityName === first.cityName)
+      )
+    );
+    if (exists) {
+      alert(`${first.cityName} and ${city.cityName} are already connected.`);
+      setSelectedMarkers([]);
+      return;
+    }
 
-      // Connection limit?
-      const activeCnt = currentLines.filter(l => !l.isDeleted).length;
-      if (connectionLimit != null && activeCnt >= connectionLimit) {
-        alert(`Connection limit reached (${connectionLimit} max). Delete a line to reroute.`);
-        return [];
-      }
+    // Connection limit?
+    const activeCnt = currentLines.filter(l => !l.isDeleted).length;
+    if (connectionLimit != null && activeCnt >= connectionLimit) {
+      alert(`Connection limit reached (${connectionLimit} max). Delete a line to reroute.`);
+      setSelectedMarkers([]);
+      return;
+    }
 
-      // Degree limit checks
-      const currentDegree = computeDegreeMap(currentLines);
-      const firstDef  = initialCities.find(c => c.cityName === first.cityName);
-      const targetDef = initialCities.find(c => c.cityName === city.cityName);
+    // Degree limit checks
+    const currentDegree = computeDegreeMap(currentLines);
+    const firstDef  = initialCities.find(c => c.cityName === first.cityName);
+    const targetDef = initialCities.find(c => c.cityName === city.cityName);
 
-      if (firstDef?.maxDegree != null && isAtMaxDegree(first.cityName, firstDef.maxDegree, currentDegree)) {
-        alert(`${first.cityName} is at its connection limit (${firstDef.maxDegree} max).`);
-        return [];
-      }
-      if (targetDef?.maxDegree != null && isAtMaxDegree(city.cityName, targetDef.maxDegree, currentDegree)) {
-        alert(`${city.cityName} is at its connection limit (${targetDef.maxDegree} max).`);
-        return [];
-      }
+    if (firstDef?.maxDegree != null && isAtMaxDegree(first.cityName, firstDef.maxDegree, currentDegree)) {
+      alert(`${first.cityName} is at its connection limit (${firstDef.maxDegree} max).`);
+      setSelectedMarkers([]);
+      return;
+    }
+    if (targetDef?.maxDegree != null && isAtMaxDegree(city.cityName, targetDef.maxDegree, currentDegree)) {
+      alert(`${city.cityName} is at its connection limit (${targetDef.maxDegree} max).`);
+      setSelectedMarkers([]);
+      return;
+    }
 
-      // Budget check
-      const cost = calculateLineCost(first, city);
-      if (currentMoney < cost) {
-        alert(`Not enough budget. Need €${cost}, have €${currentMoney}.`);
-        return [];
-      }
+    // Backend-authoritative price — must be confirmed before any money
+    // actually changes hands. The local calculateLineCost() (used for the
+    // hover tooltip and the budget-fail scan above) is preview-only.
+    let cost;
+    try {
+      cost = await confirmLineCost(first, city);
+    } catch (err) {
+      console.error('Line cost confirmation failed:', err);
+      alert('Could not confirm connection price. Please try again.');
+      setSelectedMarkers([]);
+      return;
+    }
 
-      // Commit
-      setMoney(m => m - cost);
-      const newLine = { id: Date.now(), points: [first, city], className: 'singleline', isNew: true };
-      setLines(prev2 => [...prev2, newLine]);
-      setTimeout(() => {
-        setLines(prev2 => prev2.map(l => l.id === newLine.id ? { ...l, isNew: false } : l));
-      }, 1100);
+    // Staleness guard: if the user changed their selection while the price
+    // confirmation was in flight (e.g. clicked a third city, or cleared
+    // selection), bail out instead of committing a line based on a `first`
+    // that's no longer the active selection.
+    if (selectedMarkers.length !== 1 || selectedMarkers[0].cityName !== first.cityName) {
+      return;
+    }
 
-      return [];
-    });
-  }, [gameOver, initialCities, connectionLimit]);
+    if (currentMoney < cost) {
+      alert(`Not enough budget. Need €${cost}, have €${currentMoney}.`);
+      setSelectedMarkers([]);
+      return;
+    }
+
+    // Commit
+    setMoney(m => m - cost);
+    const newLine = { id: Date.now(), points: [first, city], className: 'singleline', isNew: true };
+    setLines(prev2 => [...prev2, newLine]);
+    setTimeout(() => {
+      setLines(prev2 => prev2.map(l => l.id === newLine.id ? { ...l, isNew: false } : l));
+    }, 1100);
+
+    setSelectedMarkers([]);
+  }, [gameOver, initialCities, connectionLimit, selectedMarkers]);
 
   const handleLineClick = useCallback((e, line) => {
     e.stopPropagation();
@@ -276,7 +318,10 @@ function PuzzleMap({ scenario }) {
     const target = lineMenu.line;
     if (!target) return;
     setLines(prev => prev.map(l => l.id === target.id ? { ...l, isDeleted: true } : l));
-    // 40% refund on deletion
+    // 40% refund on deletion — uses the local preview formula, same as
+    // before. Refunds are derived from the original purchase price, which
+    // was already confirmed by the backend at the time of purchase, so
+    // re-confirming here would just recompute an identical value.
     const refund = Math.round(calculateLineCost(target.points[0], target.points[1]) * 0.4);
     setMoney(m => m + refund);
     setLineMenu({ visible: false, position: { x: 0, y: 0 }, line: null });
